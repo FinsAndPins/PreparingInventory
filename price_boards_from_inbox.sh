@@ -7,6 +7,10 @@
 #   PIN_PRICING_STUDY_MVP  — PinPricingStudyMVP path (default: iCloud Cursor Projects)
 #   POOL_N, GATE_T        — passed to run_visual_baseline_pipeline.py
 #   SKIP_GIT=1            — skip commit and push
+#   eBay Browse resilience (optional overrides for run_visual_baseline_pipeline.py):
+#     EBAY_BROWSE_MIN_INTERVAL_SEC  EBAY_LARGE_RUN_THRESHOLD  EBAY_LARGE_RUN_MIN_INTERVAL_SEC
+#     EBAY_MAX_RETRIES  EBAY_BACKOFF_CAP_SEC  EBAY_CIRCUIT_429_THRESHOLD  EBAY_CIRCUIT_COOLDOWN_SEC
+#     EBAY_NO_AUTO_LARGE_RUN=1  — disable auto pacing for large crop counts
 #
 set -euo pipefail
 set +H
