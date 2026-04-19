@@ -1,6 +1,9 @@
 #!/bin/bash
 # Double-click in Finder to price boards from BoardsToPrice/ and push to GitHub.
 # First run: System Settings → Privacy & Security → allow Terminal/scripts if macOS asks.
+#
+# This launcher does not apply show/Whatnot price rounding; the Lexi harness is built from
+# PinPricingStudyMVP/build_testing_ui.py and uses raw eBay list prices (optional Whatnot preview is display-only).
 
 set +H
 set -e
