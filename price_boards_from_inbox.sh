@@ -11,6 +11,7 @@
 #     EBAY_BROWSE_MIN_INTERVAL_SEC  EBAY_LARGE_RUN_THRESHOLD  EBAY_LARGE_RUN_MIN_INTERVAL_SEC
 #     EBAY_MAX_RETRIES  EBAY_BACKOFF_CAP_SEC  EBAY_CIRCUIT_429_THRESHOLD  EBAY_CIRCUIT_COOLDOWN_SEC
 #     EBAY_NO_AUTO_LARGE_RUN=1  — disable auto pacing for large crop counts
+#   EBAY_CHECKPOINT_EVERY  — write candidates.checkpoint.json every N crops (default 50; 0=off)
 #
 set -euo pipefail
 set +H
@@ -93,6 +94,7 @@ log "Pipeline start run-id=${tmp}"
     --run-id "$tmp" \
     --pool-n "${POOL_N:-20}" \
     --gate-t "${GATE_T:-10}" \
+    --ebay-checkpoint-every "${EBAY_CHECKPOINT_EVERY:-50}" \
     --build-harness --harness-firebase-collab
 )
 
