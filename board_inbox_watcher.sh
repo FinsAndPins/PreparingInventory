@@ -110,11 +110,15 @@ OSA
 
 run_price_pipeline() {
   if [[ -n "${BOARD_INBOX_DIR:-}" ]]; then
-    /usr/bin/osascript - "$PREP" "$PRICE_SCRIPT" <<'OSA'
+    # price_boards reads ${PREP}/BoardsToPrice; push mirror → iCloud in the same do shell script so
+    # the pricing script can see files (launchd alone cannot list Mobile Documents).
+    /usr/bin/osascript - "$PREP" "$PRICE_SCRIPT" "${BOARD_INBOX_DIR}/" "${PREP}/BoardsToPrice/" <<'OSA'
 on run argv
   set p to item 1 of argv
   set s to item 2 of argv
-  do shell script "export PREP=" & quoted form of p & " && cd " & quoted form of p & " && /usr/bin/caffeinate -dimsu -- /bin/bash " & quoted form of s
+  set mirror to item 3 of argv
+  set dest to item 4 of argv
+  do shell script "/usr/bin/rsync -a --delete " & quoted form of mirror & " " & quoted form of dest & " && export PREP=" & quoted form of p & " && cd " & quoted form of p & " && /usr/bin/caffeinate -dimsu -- /bin/bash " & quoted form of s
 end run
 OSA
   else
