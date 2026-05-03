@@ -130,7 +130,7 @@ log "Wrote ${dst}/SHARE_LEXI_URL.txt"
 log "Harness: ${PAGES_URL}"
 
 if [[ "${SKIP_GIT:-0}" == "1" ]]; then
-  log "SKIP_GIT=1 — not committing. Run: cd \"$PREP\" && git add \"$NEWNAME\" BoardsToPrice && git commit && git push"
+  log "SKIP_GIT=1 — not committing. After a successful run: cd \"$PREP\" && PREP_REPO_ROOT=\"$PREP\" python3 update_pricing_index.py && git add \"$NEWNAME\" BoardsToPrice pricing_index.json index.html update_pricing_index.py && git commit && git push"
   exit 0
 fi
 
@@ -140,9 +140,18 @@ if [[ ! -d .git ]]; then
   exit 0
 fi
 
-git add "$NEWNAME" BoardsToPrice
+if [[ -f "${PREP}/update_pricing_index.py" ]] && command -v python3 >/dev/null 2>&1; then
+  PREP_REPO_ROOT="$PREP" python3 "${PREP}/update_pricing_index.py" 2>&1 | tee -a "$LOG_FILE" || log "WARN: update_pricing_index.py failed — Lexi landing page list may be stale"
+else
+  log "WARN: python3 or update_pricing_index.py missing — skipping pricing_index.json refresh"
+fi
 
-BAD=$(git diff --cached --name-only | grep -Ev "^(BoardsToPrice/|${NEWNAME}/)" || true)
+git add "$NEWNAME" BoardsToPrice
+for f in pricing_index.json index.html update_pricing_index.py; do
+  [[ -f "$f" ]] && git add "$f"
+done
+
+BAD=$(git diff --cached --name-only | grep -Ev "^(BoardsToPrice/|${NEWNAME}/|pricing_index\.json|index\.html|update_pricing_index\.py)$" || true)
 if [[ -n "$BAD" ]]; then
   log "ERROR: unrelated paths are staged. Aborting commit. Staged:"
   log "$BAD"

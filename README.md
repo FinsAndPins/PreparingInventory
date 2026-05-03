@@ -2,6 +2,14 @@
 
 Static bundles for **GitHub Pages** (inventory / pricing / validation UIs). The repo root is the Pages site; **`.nojekyll`** is present so paths with underscores work.
 
+## Lexi — all pricing collections (bookmark this)
+
+One stable URL lists every **`PriceCollection_*`** folder that has a harness (**`testing_ui_visual_baseline/index.html`**), **newest first**:
+
+- **Open:** [PreparingInventory index](https://finsandpins.github.io/PreparingInventory/) (root **`index.html`** loads **`pricing_index.json`**).
+
+After each successful **`price_boards_from_inbox.sh`** run, the script runs **`update_pricing_index.py`** so **`pricing_index.json`** stays current when you commit and push.
+
 ## ClickToPrice — Show 2026-04-16 (shared harness)
 
 - **Open:** [Show20260416/testing_ui_visual_baseline/index.html](https://finsandpins.github.io/PreparingInventory/Show20260416/testing_ui_visual_baseline/index.html)

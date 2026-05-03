@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fins &amp; Pins — Pricing collections</title>
+  <style>
+    :root {
+      --bg: #121218;
+      --card: #1b1b22;
+      --border: #2a2a33;
+      --text: #eee;
+      --muted: #9aa;
+      --accent: #63a4ff;
+    }
+    body {
+      font-family: -apple-system, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 24px 18px 48px;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+    }
+    h1 { font-size: 1.35rem; margin: 0 0 8px; font-weight: 700; }
+    p.intro { color: var(--muted); margin: 0 0 20px; max-width: 52rem; font-size: 0.95rem; }
+    .panel {
+      max-width: 52rem;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--card);
+      overflow: hidden;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+    th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
+    tr:last-child td { border-bottom: none; }
+    a { color: var(--accent); text-decoration: none; font-weight: 600; }
+    a:hover { text-decoration: underline; }
+    .folder { font-size: 0.82rem; color: var(--muted); font-family: ui-monospace, monospace; }
+    #status { color: var(--muted); font-size: 0.9rem; margin-bottom: 14px; min-height: 1.2em; }
+    footer { margin-top: 22px; font-size: 0.82rem; color: var(--muted); max-width: 52rem; }
+  </style>
+</head>
+<body>
+  <h1>Pricing collections (Lexi harness)</h1>
+  <p class="intro">
+    Latest <strong>PriceCollection_*</strong> runs that include a built harness. Bookmark this page — after each successful inbox pricing push,
+    the list refreshes from <code>pricing_index.json</code>.
+  </p>
+  <div id="status">Loading…</div>
+  <div class="panel">
+    <table>
+      <thead>
+        <tr>
+          <th>When (from folder name)</th>
+          <th>Open harness</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+  <footer>
+    Repo: <a href="https://github.com/FinsAndPins/PreparingInventory">FinsAndPins/PreparingInventory</a>
+    · If the list is empty, run <code>python3 update_pricing_index.py</code> at repo root and commit <code>pricing_index.json</code>.
+  </footer>
+  <script>
+    const rowsEl = document.getElementById("rows");
+    const statusEl = document.getElementById("status");
+
+    function fail(msg) {
+      statusEl.textContent = msg;
+      rowsEl.innerHTML = "";
+    }
+
+    fetch("./pricing_index.json", { cache: "no-store" })
+      .then((r) => {
+        if (!r.ok) throw new Error("Could not load pricing_index.json (" + r.status + ")");
+        return r.json();
+      })
+      .then((data) => {
+        const list = (data && data.collections) || [];
+        if (!list.length) {
+          fail("No PriceCollection folders with a harness were listed yet.");
+          return;
+        }
+        statusEl.textContent =
+          list.length + " collection(s) · index updated " + (data.updated_iso || "");
+        rowsEl.innerHTML = list
+          .map(
+            (c) =>
+              "<tr><td><div>" +
+              escapeHtml(c.label || c.folder) +
+              '</div><div class="folder">' +
+              escapeHtml(c.folder) +
+              "</div></td><td><a href=\"" +
+              escapeAttr(c.harness_url) +
+              '">Open ClickToPrice harness</a></td></tr>'
+          )
+          .join("");
+      })
+      .catch((e) => {
+        fail(String(e.message || e));
+      });
+
+    function escapeHtml(s) {
+      return String(s || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+    function escapeAttr(s) {
+      return escapeHtml(s).replace(/"/g, "&quot;");
+    }
+  </script>
+</body>
+</html>
