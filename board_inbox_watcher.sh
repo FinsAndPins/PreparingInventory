@@ -124,20 +124,10 @@ OSABRIDGE
 }
 
 run_price_pipeline() {
-  if [[ -n "${BOARD_INBOX_DIR:-}" ]]; then
-    # Pass BOARD_INBOX_DIR so price_boards reads the local mirror; rsync into iCloud BoardsToPrice fails
-    # with Operation not permitted from do shell script.
-    /usr/bin/osascript - "$PREP" "$PRICE_SCRIPT" "$BOARD_INBOX_DIR" <<'OSA'
-on run argv
-  set p to item 1 of argv
-  set s to item 2 of argv
-  set b to item 3 of argv
-  do shell script "export PREP=" & quoted form of p & " && export BOARD_INBOX_DIR=" & quoted form of b & " && cd " & quoted form of p & " && /usr/bin/caffeinate -dimsu -- /bin/bash " & quoted form of s
-end run
-OSA
-  else
-    PREP="$PREP" /usr/bin/caffeinate -dimsu -- /bin/bash "$PRICE_SCRIPT"
-  fi
+  # Do not wrap price_boards in osascript "do shell script": that environment cannot write under
+  # ~/Library/Mobile Documents/... (e.g. mkdir/touch BoardsToPrice, git), so the run dies right after
+  # moving the mirror inbox. launchd already runs this watcher as your GUI user — caffeinate + bash is enough.
+  PREP="$PREP" BOARD_INBOX_DIR="${BOARD_INBOX_DIR:-}" /usr/bin/caffeinate -dimsu -- /bin/bash "$PRICE_SCRIPT"
 }
 
 inbox_has_boards() {
