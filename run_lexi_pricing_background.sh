@@ -23,6 +23,29 @@ if [[ ! -x "$PY" ]] || [[ ! -f "$PL" ]]; then
   exit 1
 fi
 
+heic_to_jpeg_in_dir() {
+  local dir="$1"
+  local h out base
+  shopt -s nullglob
+  for h in "${dir}"/*.heic "${dir}"/*.HEIC "${dir}"/*.heif "${dir}"/*.HEIF; do
+    [[ -f "$h" ]] || continue
+    [[ "$(dirname "$h")" == "$dir" ]] || continue
+    base="${h%.*}"
+    out="${base}.JPG"
+    if [[ -f "$out" ]]; then
+      out="${base}_from_heic.JPG"
+    fi
+    if command -v sips >/dev/null 2>&1 && sips -s format jpeg "$h" --out "$out" >/dev/null 2>&1; then
+      rm -f "$h"
+      echo "$(date -Iseconds) HEIC → $(basename "$out") (removed $(basename "$h"))"
+    else
+      echo "ERROR: could not convert HEIC/HEIF (need macOS sips): $h" >&2
+      exit 1
+    fi
+  done
+  shopt -u nullglob
+}
+
 run_one() {
   local COL="$1"
   local col_dir="${PREP}/${COL}"
@@ -31,6 +54,8 @@ run_one() {
     echo "ERROR: missing $col_dir" >&2
     exit 1
   fi
+
+  heic_to_jpeg_in_dir "$col_dir"
 
   mkdir -p "$stage"
   rm -f "${stage}"/IMG_*.JPG 2>/dev/null || true
@@ -46,7 +71,7 @@ run_one() {
   local n=$((i - 1))
   echo "$(date -Iseconds) ${COL}: staged ${n} boards → ${stage}"
   if [[ "$n" -lt 1 ]]; then
-    echo "ERROR: no board JPGs in top level of ${col_dir}" >&2
+    echo "ERROR: no board JPG/HEIC in top level of ${col_dir}" >&2
     exit 1
   fi
 

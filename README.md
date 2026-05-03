@@ -10,6 +10,10 @@ One stable URL lists every **`PriceCollection_*`** folder that has a harness (**
 
 After each successful **`price_boards_from_inbox.sh`** run, the script runs **`update_pricing_index.py`** so **`pricing_index.json`** stays current when you commit and push.
 
+## BoardsToPrice inbox (`RunBoardsPricing.command`)
+
+Put board photos in **`BoardsToPrice/`** (repo root). **JPEG** and **HEIC/HEIF** (iPhone) in that folder’s **top level** are accepted: HEIC is converted to **`.JPG`** with **macOS `sips`**, then the HEIC file is removed, before Roboflow/eBay staging. The Python pipeline is unchanged.
+
 ## ClickToPrice — Show 2026-04-16 (shared harness)
 
 - **Open:** [Show20260416/testing_ui_visual_baseline/index.html](https://finsandpins.github.io/PreparingInventory/Show20260416/testing_ui_visual_baseline/index.html)
@@ -28,6 +32,8 @@ The last **double-click inbox → Roboflow → eBay → Lexi harness** flow you 
 ```bash
 git checkout preparing-inventory-pricing-baseline-2026-04-26 -- RunBoardsPricing.command price_boards_from_inbox.sh
 ```
+
+That tag predates **HEIC inbox support**; use **`main`** for the current launcher, or merge the tag’s scripts with your tree if you need an older baseline plus HEIC.
 
 - **Inspect a file without changing your tree:**
 

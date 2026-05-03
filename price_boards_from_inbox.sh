@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Drop board JPGs into BoardsToPrice/, then run this (or double-click RunBoardsPricing.command).
+# Drop board photos into BoardsToPrice/ (JPEG or HEIC), then run this (or double-click RunBoardsPricing.command).
+# HEIC/HEIF in the inbox top level are converted to .JPG with macOS sips, then originals are removed.
 # Renames inbox → PriceCollection_YYYYMMDD_HHMM, runs Roboflow + eBay + Lexi harness, recreates empty BoardsToPrice,
 # then commits and pushes only the new collection + BoardsToPrice (aborts if other staged changes exist).
 #
@@ -36,6 +37,32 @@ if [[ ! -x "$PY" ]] || [[ ! -f "$PL" ]]; then
   exit 1
 fi
 
+# Convert iPhone HEIC/HEIF in inbox root → JPEG (pipeline expects JPG in _staged_boards).
+heic_to_jpeg_in_dir() {
+  local dir="$1"
+  local h out base
+  shopt -s nullglob
+  for h in "${dir}"/*.heic "${dir}"/*.HEIC "${dir}"/*.heif "${dir}"/*.HEIF; do
+    [[ -f "$h" ]] || continue
+    [[ "$(dirname "$h")" == "$dir" ]] || continue
+    base="${h%.*}"
+    out="${base}.JPG"
+    if [[ -f "$out" ]]; then
+      out="${base}_from_heic.JPG"
+    fi
+    if command -v sips >/dev/null 2>&1 && sips -s format jpeg "$h" --out "$out" >/dev/null 2>&1; then
+      rm -f "$h"
+      log "Converted HEIC → $(basename "$out") (removed $(basename "$h"))"
+    else
+      log "ERROR: could not convert HEIC/HEIF (need macOS sips): $h"
+      exit 1
+    fi
+  done
+  shopt -u nullglob
+}
+
+heic_to_jpeg_in_dir "$INBOX"
+
 shopt -s nullglob
 board_count=0
 for p in "${INBOX}"/*.jpg "${INBOX}"/*.jpeg "${INBOX}"/*.JPG "${INBOX}"/*.JPEG; do
@@ -46,7 +73,7 @@ done
 shopt -u nullglob
 
 if [[ "$board_count" -lt 1 ]]; then
-  log "ERROR: Put at least one board photo (jpg/jpeg) in: $INBOX"
+  log "ERROR: Put at least one board photo (jpg/jpeg/heic) in: $INBOX"
   exit 1
 fi
 
@@ -67,6 +94,8 @@ COL_DIR="${PREP}/${NEWNAME}"
 STAGE="${COL_DIR}/_staged_boards"
 mkdir -p "$STAGE"
 rm -f "${STAGE}"/IMG_*.JPG 2>/dev/null || true
+
+heic_to_jpeg_in_dir "$COL_DIR"
 
 i=1
 shopt -s nullglob
