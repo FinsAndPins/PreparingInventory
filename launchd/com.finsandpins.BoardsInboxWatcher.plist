@@ -11,17 +11,16 @@
 	<key>ThrottleInterval</key>
 	<integer>30</integer>
 	<key>WorkingDirectory</key>
-	<string>FULL_PATH_TO_PREPARING_INVENTORY</string>
+	<string>FULL_PATH_TO_USER_HOME</string>
 	<key>ProgramArguments</key>
 	<array>
 		<string>/bin/bash</string>
-		<string>-lc</string>
-		<string>exec ./board_inbox_watcher.sh</string>
+		<string>FULL_PATH_TO_LAUNCHER_SCRIPT</string>
 	</array>
 	<key>StandardOutPath</key>
-	<string>FULL_PATH_TO_PREPARING_INVENTORY/_logs/launchd_boards_watcher.log</string>
+	<string>FULL_PATH_TO_LOCAL_WATCHER_BIN/_logs/launchd_boards_watcher.log</string>
 	<key>StandardErrorPath</key>
-	<string>FULL_PATH_TO_PREPARING_INVENTORY/_logs/launchd_boards_watcher.err.log</string>
+	<string>FULL_PATH_TO_LOCAL_WATCHER_BIN/_logs/launchd_boards_watcher.err.log</string>
 	<key>EnvironmentVariables</key>
 	<dict>
 		<key>PATH</key>

@@ -24,28 +24,15 @@ For **hands-off** runs when Steve is not at the machine: a long-lived watcher po
 
 **Message text (everyone on the list gets the same body):** (1) **Start:** “Fins & Pins pricing: started on Steve's Mac (boards detected in BoardsToPrice). You'll get another message when the run finishes and has been pushed to GitHub.” (2) **Success:** “Fins & Pins pricing: finished and pushed to GitHub.” then a blank line, the harness URL line from the log (or a fallback line if missing), then a blank line and “The harness link often works within ~10-15 minutes on finsandpins.github.io.” (3) **Failure:** “Fins & Pins pricing: FAILED (automation exit *N*).” then guidance to re-upload later, then a line that you can check **`_logs/price_inbox_last.log`** when you are up.
 
-**Install `launchd` (template):** Edit **`launchd/com.finsandpins.BoardsInboxWatcher.plist`** and replace **`FULL_PATH_TO_PREPARING_INVENTORY`** with the absolute path to this repo root (three occurrences: **WorkingDirectory** and both log paths). The string must be a real folder on disk (no placeholder left). Ensure log directories exist, then install:
+**Install `launchd` (iCloud-friendly):** macOS **launchd** often cannot **execute** (or even **open for read**) helper scripts under **iCloud `Mobile Documents/…`** — you see **`Operation not permitted`** in the launchd log. From the repo root, run **`bash launchd/install_boards_inbox_launchagent.sh`**. It copies **`board_inbox_watcher.sh`**, **`price_boards_from_inbox.sh`**, and **`lexi_send_imessage.py`** to **`~/Library/Application Support/FinsAndPins/PreparingInventoryWatcherBin/`** (local disk), installs the **launcher** and **LaunchAgent**, and runs **`launchctl bootstrap`**. **`PREP`** stays your iCloud repo path so **`BoardsToPrice/`** and git output are unchanged. **Re-run the install script** after you edit any of those three scripts (or **`LEXI_NOTIFY.env`** — the installer copies it beside the watcher so launchd can read it; it stays out of git).
 
-```bash
-PREP="/Users/steve/Library/Mobile Documents/com~apple~CloudDocs/GitHub PreparingInventory/PreparingInventory"
-mkdir -p "$PREP/_logs"
-plutil -lint ~/Library/LaunchAgents/com.finsandpins.BoardsInboxWatcher.plist
-```
+**Reload only** (plist already installed): `launchctl kickstart -k "gui/$(id -u)/com.finsandpins.BoardsInboxWatcher"`
 
-Register the job (current macOS prefers **`bootstrap`** over legacy **`load`**):
+**If `launchctl load` fails with “Input/output error” (5):** run **`plutil -lint`** on **`~/Library/LaunchAgents/com.finsandpins.BoardsInboxWatcher.plist`**, then re-run the **install** script above (do not point **ProgramArguments** directly at scripts under **`Mobile Documents/`**).
 
-```bash
-AGENT="$HOME/Library/LaunchAgents/com.finsandpins.BoardsInboxWatcher.plist"
-launchctl bootout "gui/$(id -u)/com.finsandpins.BoardsInboxWatcher" 2>/dev/null || true
-launchctl bootstrap "gui/$(id -u)" "$AGENT"
-launchctl kickstart -k "gui/$(id -u)/com.finsandpins.BoardsInboxWatcher"
-```
+**Logs:** pricing run log stays **`_logs/price_inbox_last.log`** under the repo. Watcher + launchd wrapper logs use **`~/Library/Application Support/FinsAndPins/PreparingInventoryWatcherBin/_logs/`** (`boards_watcher.log`, **`launchd_boards_watcher.log`**, **`launchd_boards_watcher.err.log`**).
 
-**If `launchctl load` fails with “Input/output error” (5):** (1) Open **`~/Library/LaunchAgents/com.finsandpins.BoardsInboxWatcher.plist`** and confirm **every** path is the real PreparingInventory path—not **`FULL_PATH_TO_PREPARING_INVENTORY`**. (2) Run **`plutil -lint`** on that file; fix XML if it reports an error. (3) Confirm **`mkdir -p …/_logs`** has been run so **StandardOutPath** / **StandardErrorPath** folders exist. (4) Use **`bootstrap`** as above instead of **`load`**.
-
-Ensure **`board_inbox_watcher.sh`** is executable (`chmod +x board_inbox_watcher.sh`). Logs: **`_logs/boards_watcher.log`**, **`_logs/launchd_boards_watcher.log`**, **`_logs/launchd_boards_watcher.err.log`**.
-
-**Stale lock:** If a run crashes hard and **`_logs/boards_watcher_active.lockdir`** is left behind with **no** pricing process running, remove that directory once (`rmdir _logs/boards_watcher_active.lockdir`) so the watcher can run again.
+**Stale lock:** If a run crashes hard and **`boards_watcher_active.lockdir`** is left under that **`PreparingInventoryWatcherBin/_logs`** folder with **no** pricing process running, remove it once (`rmdir …/boards_watcher_active.lockdir`).
 
 **Future / v2 ideas:** **`FUTURE.md`**.
 

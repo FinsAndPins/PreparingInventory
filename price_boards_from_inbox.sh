@@ -17,7 +17,12 @@
 set -euo pipefail
 set +H
 
-PREP="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+# Parent may set PREP (e.g. board_inbox_watcher runs this as bash -s < file for iCloud + launchd).
+if [[ -n "${PREP:-}" ]] && [[ -d "${PREP}" ]]; then
+  :
+else
+  PREP="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+fi
 INBOX="${PREP}/BoardsToPrice"
 PIN="${PIN_PRICING_STUDY_MVP:-${HOME}/Library/Mobile Documents/com~apple~CloudDocs/Cursor Projects/PinPricingStudyMVP}"
 PY="${PIN}/.venv/bin/python"
@@ -183,7 +188,7 @@ done
 # Allow any path under BoardsToPrice/ or the new collection; exact root files only for the rest.
 # (A trailing $ on the whole alternation wrongly required lines to be exactly "Collection/", so
 # every real file looked "unrelated" and the commit always aborted.)
-BAD=$(git diff --cached --name-only | grep -Ev "^(BoardsToPrice/|${NEWNAME}/|pricing_index\.json\$|index\.html\$|update_pricing_index\.py\$|price_boards_from_inbox\.sh\$|RunBoardsPricing\.command\$|run_lexi_pricing_background\.sh\$|board_inbox_watcher\.sh\$|lexi_send_imessage\.py\$)" || true)
+BAD=$(git diff --cached --name-only | grep -Ev "^(BoardsToPrice/|${NEWNAME}/|pricing_index\.json\$|index\.html\$|update_pricing_index\.py\$|price_boards_from_inbox\.sh\$|RunBoardsPricing\.command\$|run_lexi_pricing_background\.sh\$|board_inbox_watcher\.sh\$|lexi_send_imessage\.py\$|launchd/)" || true)
 if [[ -n "$BAD" ]]; then
   log "ERROR: unrelated paths are staged. Aborting commit. Staged:"
   log "$BAD"

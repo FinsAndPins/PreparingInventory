@@ -10,36 +10,50 @@
 #   1) Copy LEXI_NOTIFY.example.env → LEXI_NOTIFY.env (gitignored); set LEXI_IMESSAGE_HANDLE
 #      or PRICING_NOTIFY_HANDLES (space-separated — same texts to each).
 #   2) Grant Messages automation for the parent process (Terminal or launchd).
-#   3) Load launchd/com.finsandpins.BoardsInboxWatcher.plist (see README).
+#   3) Load launchd/com.finsandpins.BoardsInboxWatcher.plist (see README + install script).
 #
 # Env (optional):
 #   PRICE_INBOX_QUIET_SEC   default 120 — folder must be unchanged this long
 #   PRICE_INBOX_POLL_SEC    default 10  — how often to rescan
 #   PIN_PRICING_STUDY_MVP   same as price_boards_from_inbox.sh
+#   LOCAL_WATCHER_BIN     if set, directory with copies of this script, price_boards_from_inbox.sh,
+#                           and lexi_send_imessage.py (launchd cannot run scripts from iCloud paths).
 #
 set -uo pipefail
 set +H
 
-PREP="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+if [[ -n "${PREP:-}" ]] && [[ -d "${PREP}" ]]; then
+  :
+else
+  PREP="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+fi
 INBOX="${PREP}/BoardsToPrice"
-LOG="${PREP}/_logs/boards_watcher.log"
-LOCKDIR="${PREP}/_logs/boards_watcher_active.lockdir"
-PRICE_SCRIPT="${PREP}/price_boards_from_inbox.sh"
-SEND_PY="${PREP}/lexi_send_imessage.py"
+# Binaries/logs: same as repo when run from Terminal; local copies when LOCAL_WATCHER_BIN is set (launchd + iCloud).
+BIN="${LOCAL_WATCHER_BIN:-$PREP}"
+LOG="${BIN}/_logs/boards_watcher.log"
+LOCKDIR="${BIN}/_logs/boards_watcher_active.lockdir"
+PRICE_SCRIPT="${BIN}/price_boards_from_inbox.sh"
+SEND_PY="${BIN}/lexi_send_imessage.py"
 LAST_PRICE_LOG="${PREP}/_logs/price_inbox_last.log"
 
 QUIET_SEC="${PRICE_INBOX_QUIET_SEC:-120}"
 POLL_SEC="${PRICE_INBOX_POLL_SEC:-10}"
 
-mkdir -p "${PREP}/_logs"
+mkdir -p "${BIN}/_logs" "${PREP}/_logs"
 exec >>"$LOG" 2>&1
 
 echo "[$(date -Iseconds)] board_inbox_watcher starting (quiet=${QUIET_SEC}s poll=${POLL_SEC}s)"
 
-if [[ -f "${PREP}/LEXI_NOTIFY.env" ]]; then
+NOTIFY_ENV=""
+if [[ -f "${BIN}/LEXI_NOTIFY.env" ]]; then
+  NOTIFY_ENV="${BIN}/LEXI_NOTIFY.env"
+elif [[ -f "${PREP}/LEXI_NOTIFY.env" ]]; then
+  NOTIFY_ENV="${PREP}/LEXI_NOTIFY.env"
+fi
+if [[ -n "$NOTIFY_ENV" ]]; then
   set -a
   # shellcheck disable=SC1090
-  source "${PREP}/LEXI_NOTIFY.env"
+  source "$NOTIFY_ENV"
   set +a
 fi
 
@@ -120,7 +134,7 @@ while true; do
 
       set +e
       # Best-effort: keep the Mac awake while the long pricing pipeline runs (lid may be closed).
-      caffeinate -dimsu -- bash "$PRICE_SCRIPT"
+      PREP="$PREP" caffeinate -dimsu -- bash "$PRICE_SCRIPT"
       rc=$?
       set -e
 
