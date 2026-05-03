@@ -180,7 +180,10 @@ for f in pricing_index.json index.html update_pricing_index.py; do
   [[ -f "$f" ]] && git add "$f"
 done
 
-BAD=$(git diff --cached --name-only | grep -Ev "^(BoardsToPrice/|${NEWNAME}/|pricing_index\.json|index\.html|update_pricing_index\.py)$" || true)
+# Allow any path under BoardsToPrice/ or the new collection; exact root files only for the rest.
+# (A trailing $ on the whole alternation wrongly required lines to be exactly "Collection/", so
+# every real file looked "unrelated" and the commit always aborted.)
+BAD=$(git diff --cached --name-only | grep -Ev "^(BoardsToPrice/|${NEWNAME}/|pricing_index\.json\$|index\.html\$|update_pricing_index\.py\$|price_boards_from_inbox\.sh\$|RunBoardsPricing\.command\$|run_lexi_pricing_background\.sh\$)" || true)
 if [[ -n "$BAD" ]]; then
   log "ERROR: unrelated paths are staged. Aborting commit. Staged:"
   log "$BAD"
