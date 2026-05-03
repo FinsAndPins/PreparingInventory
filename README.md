@@ -24,12 +24,24 @@ For **hands-off** runs when Steve is not at the machine: a long-lived watcher po
 
 **Message text (everyone on the list gets the same body):** (1) **Start:** “Fins & Pins pricing: started on Steve's Mac (boards detected in BoardsToPrice). You'll get another message when the run finishes and has been pushed to GitHub.” (2) **Success:** “Fins & Pins pricing: finished and pushed to GitHub.” then a blank line, the harness URL line from the log (or a fallback line if missing), then a blank line and “The harness link often works within ~10-15 minutes on finsandpins.github.io.” (3) **Failure:** “Fins & Pins pricing: FAILED (automation exit *N*).” then guidance to re-upload later, then a line that you can check **`_logs/price_inbox_last.log`** when you are up.
 
-**Install `launchd` (template):** Edit **`launchd/com.finsandpins.BoardsInboxWatcher.plist`** and replace **`FULL_PATH_TO_PREPARING_INVENTORY`** with the absolute path to this repo root (three occurrences: **WorkingDirectory** and both log paths). Copy to a stable location (for example **`~/Library/LaunchAgents/`**), then:
+**Install `launchd` (template):** Edit **`launchd/com.finsandpins.BoardsInboxWatcher.plist`** and replace **`FULL_PATH_TO_PREPARING_INVENTORY`** with the absolute path to this repo root (three occurrences: **WorkingDirectory** and both log paths). The string must be a real folder on disk (no placeholder left). Ensure log directories exist, then install:
 
 ```bash
-launchctl unload ~/Library/LaunchAgents/com.finsandpins.BoardsInboxWatcher.plist 2>/dev/null
-launchctl load ~/Library/LaunchAgents/com.finsandpins.BoardsInboxWatcher.plist
+PREP="/Users/steve/Library/Mobile Documents/com~apple~CloudDocs/GitHub PreparingInventory/PreparingInventory"
+mkdir -p "$PREP/_logs"
+plutil -lint ~/Library/LaunchAgents/com.finsandpins.BoardsInboxWatcher.plist
 ```
+
+Register the job (current macOS prefers **`bootstrap`** over legacy **`load`**):
+
+```bash
+AGENT="$HOME/Library/LaunchAgents/com.finsandpins.BoardsInboxWatcher.plist"
+launchctl bootout "gui/$(id -u)/com.finsandpins.BoardsInboxWatcher" 2>/dev/null || true
+launchctl bootstrap "gui/$(id -u)" "$AGENT"
+launchctl kickstart -k "gui/$(id -u)/com.finsandpins.BoardsInboxWatcher"
+```
+
+**If `launchctl load` fails with “Input/output error” (5):** (1) Open **`~/Library/LaunchAgents/com.finsandpins.BoardsInboxWatcher.plist`** and confirm **every** path is the real PreparingInventory path—not **`FULL_PATH_TO_PREPARING_INVENTORY`**. (2) Run **`plutil -lint`** on that file; fix XML if it reports an error. (3) Confirm **`mkdir -p …/_logs`** has been run so **StandardOutPath** / **StandardErrorPath** folders exist. (4) Use **`bootstrap`** as above instead of **`load`**.
 
 Ensure **`board_inbox_watcher.sh`** is executable (`chmod +x board_inbox_watcher.sh`). Logs: **`_logs/boards_watcher.log`**, **`_logs/launchd_boards_watcher.log`**, **`_logs/launchd_boards_watcher.err.log`**.
 
