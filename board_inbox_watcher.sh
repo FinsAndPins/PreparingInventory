@@ -18,6 +18,8 @@
 #   PIN_PRICING_STUDY_MVP   same as price_boards_from_inbox.sh
 #   LOCAL_WATCHER_BIN     if set, directory with copies of this script, price_boards_from_inbox.sh,
 #                           and lexi_send_imessage.py (launchd cannot run scripts from iCloud paths).
+#   BOARD_INBOX_DIR       optional local folder mirroring BoardsToPrice (set by LaunchAgent launcher);
+#                           rsync from iCloud via osascript so launchd can see files; pricing still runs on PREP.
 #
 set -uo pipefail
 set +H
@@ -27,7 +29,7 @@ if [[ -n "${PREP:-}" ]] && [[ -d "${PREP}" ]]; then
 else
   PREP="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 fi
-INBOX="${PREP}/BoardsToPrice"
+SCAN_INBOX="${BOARD_INBOX_DIR:-${PREP}/BoardsToPrice}"
 # Binaries/logs: same as repo when run from Terminal; local copies when LOCAL_WATCHER_BIN is set (launchd + iCloud).
 BIN="${LOCAL_WATCHER_BIN:-$PREP}"
 LOG="${BIN}/_logs/boards_watcher.log"
@@ -79,30 +81,59 @@ send_msg() {
   fi
 }
 
+# Use find (not shell globs): launchd + iCloud paths often fail glob expansion while find works.
+_board_find_board_files() {
+  find "$SCAN_INBOX" -maxdepth 1 -type f \
+    \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.heic' -o -iname '*.heif' \) \
+    ! -name '.gitkeep' ! -name '.DS_Store' 2>/dev/null "$@"
+}
+
+# launchd cannot list ~/Library/Mobile Documents/...; pull from canonical BoardsToPrice via osascript.
+bridge_pull_icloud_inbox_to_scan_dir() {
+  [[ -n "${BOARD_INBOX_DIR:-}" ]] || return 0
+  mkdir -p "${BOARD_INBOX_DIR}"
+  /usr/bin/osascript - "${PREP}/BoardsToPrice/" "${BOARD_INBOX_DIR}/" <<'OSA' 2>/dev/null || true
+on run argv
+  set src to item 1 of argv
+  set dst to item 2 of argv
+  do shell script "/usr/bin/rsync -a " & quoted form of src & " " & quoted form of dst
+end run
+OSA
+}
+
+run_price_pipeline() {
+  if [[ -n "${BOARD_INBOX_DIR:-}" ]]; then
+    /usr/bin/osascript - "$PREP" "$PRICE_SCRIPT" <<'OSA'
+on run argv
+  set p to item 1 of argv
+  set s to item 2 of argv
+  do shell script "export PREP=" & quoted form of p & " && cd " & quoted form of p & " && /usr/bin/caffeinate -dimsu -- /bin/bash " & quoted form of s
+end run
+OSA
+  else
+    PREP="$PREP" /usr/bin/caffeinate -dimsu -- /bin/bash "$PRICE_SCRIPT"
+  fi
+}
+
 inbox_has_boards() {
-  shopt -s nullglob
-  local p
-  for p in "${INBOX}"/*.jpg "${INBOX}"/*.jpeg "${INBOX}"/*.JPG "${INBOX}"/*.JPEG \
-           "${INBOX}"/*.heic "${INBOX}"/*.HEIC "${INBOX}"/*.heif "${INBOX}"/*.HEIF; do
-    [[ -f "$p" ]] || continue
-    [[ "$(dirname "$p")" == "$INBOX" ]] || continue
-    shopt -u nullglob
-    return 0
-  done
-  shopt -u nullglob
-  return 1
+  _board_find_board_files | grep -q .
 }
 
 inbox_snapshot() {
-  # Hash names + sizes + mtimes of non-gitkeep files at inbox top level.
-  find "$INBOX" -maxdepth 1 -type f ! -name '.gitkeep' -print0 2>/dev/null \
+  # Hash names + sizes + mtimes of board files at inbox top level.
+  _board_find_board_files -print0 \
     | sort -z \
     | xargs -0 stat -f '%N %z %m' 2>/dev/null \
-    | md5 || echo "empty"
+    | md5 -q 2>/dev/null || echo "empty"
 }
 
 acquire_lock() {
+  local waited=0
   while ! mkdir "$LOCKDIR" 2>/dev/null; do
+    if (( waited % 60 == 0 )); then
+      echo "[$(date -Iseconds)] waiting for lock: $LOCKDIR (${waited}s)"
+    fi
+    waited=$((waited + 2))
     sleep 2
   done
 }
@@ -113,9 +144,20 @@ release_lock() {
 
 last_snap=""
 last_change_epoch=""
+debug_tick=0
 
 while true; do
   now=$(date +%s)
+  bridge_pull_icloud_inbox_to_scan_dir
+  if [[ "${PRICE_INBOX_DEBUG:-0}" == "1" ]]; then
+    debug_tick=$((debug_tick + 1))
+    if (( debug_tick % 6 == 1 )); then
+      nf=$( (_board_find_board_files | wc -l) | tr -d '[:space:]' )
+      hb=0
+      inbox_has_boards && hb=1
+      echo "[$(date -Iseconds)] DEBUG scan_inbox=${SCAN_INBOX} file_count=${nf} has_boards=${hb} last_change_epoch=${last_change_epoch:-}"
+    fi
+  fi
   snap=$(inbox_snapshot)
 
   if [[ "$snap" != "$last_snap" ]]; then
@@ -134,7 +176,7 @@ while true; do
 
       set +e
       # Best-effort: keep the Mac awake while the long pricing pipeline runs (lid may be closed).
-      PREP="$PREP" caffeinate -dimsu -- bash "$PRICE_SCRIPT"
+      PREP="$PREP" run_price_pipeline
       rc=$?
       set -e
 

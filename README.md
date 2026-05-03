@@ -30,6 +30,8 @@ For **hands-off** runs when Steve is not at the machine: a long-lived watcher po
 
 **If `launchctl load` fails with “Input/output error” (5):** run **`plutil -lint`** on **`~/Library/LaunchAgents/com.finsandpins.BoardsInboxWatcher.plist`**, then re-run the **install** script above (do not point **ProgramArguments** directly at scripts under **`Mobile Documents/`**).
 
+**iCloud inbox vs launchd:** macOS often blocks **launchd** from **listing** files under **`Mobile Documents/`**, so the watcher mirrors **`BoardsToPrice/`** into **`~/Library/Application Support/FinsAndPins/PreparingInventoryBoardsInbox/`** every few seconds (via **`osascript` + `rsync`**) and watches that folder. The pricing script still runs against the real repo (`PREP`), also launched through **`osascript`** so it can read iCloud and call **Messages**. You still add photos to the repo’s **`BoardsToPrice/`** (iCloud) as before.
+
 **Logs:** pricing run log stays **`_logs/price_inbox_last.log`** under the repo. Watcher + launchd wrapper logs use **`~/Library/Application Support/FinsAndPins/PreparingInventoryWatcherBin/_logs/`** (`boards_watcher.log`, **`launchd_boards_watcher.log`**, **`launchd_boards_watcher.err.log`**).
 
 **Stale lock:** If a run crashes hard and **`boards_watcher_active.lockdir`** is left under that **`PreparingInventoryWatcherBin/_logs`** folder with **no** pricing process running, remove it once (`rmdir …/boards_watcher_active.lockdir`).
