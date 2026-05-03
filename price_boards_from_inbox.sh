@@ -27,7 +27,8 @@ INBOX="${PREP}/BoardsToPrice"
 PIN="${PIN_PRICING_STUDY_MVP:-${HOME}/Library/Mobile Documents/com~apple~CloudDocs/Cursor Projects/PinPricingStudyMVP}"
 PY="${PIN}/.venv/bin/python"
 PL="${PIN}/run_visual_baseline_pipeline.py"
-LOG_DIR="${PREP}/_logs"
+# launchd + osascript often cannot append logs under iCloud; watcher sets PRICE_LOG_DIR to local _logs.
+LOG_DIR="${PRICE_LOG_DIR:-${PREP}/_logs}"
 LOG_FILE="${LOG_DIR}/price_inbox_last.log"
 
 mkdir -p "$LOG_DIR" "$INBOX"

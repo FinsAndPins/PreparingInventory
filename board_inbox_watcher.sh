@@ -15,6 +15,8 @@
 # Env (optional):
 #   PRICE_INBOX_QUIET_SEC   default 120 — folder must be unchanged this long
 #   PRICE_INBOX_POLL_SEC    default 10  — how often to rescan
+#   PRICE_INBOX_FAIL_COOLDOWN_SEC  default 3600 — after a failed pricing run, wait this long before
+#                                  trying again (stops iMessage spam while boards stay in the inbox).
 #   PIN_PRICING_STUDY_MVP   same as price_boards_from_inbox.sh
 #   LOCAL_WATCHER_BIN     if set, directory with copies of this script, price_boards_from_inbox.sh,
 #                           and lexi_send_imessage.py (launchd cannot run scripts from iCloud paths).
@@ -36,10 +38,15 @@ LOG="${BIN}/_logs/boards_watcher.log"
 LOCKDIR="${BIN}/_logs/boards_watcher_active.lockdir"
 PRICE_SCRIPT="${BIN}/price_boards_from_inbox.sh"
 SEND_PY="${BIN}/lexi_send_imessage.py"
-LAST_PRICE_LOG="${PREP}/_logs/price_inbox_last.log"
+# Writable log when scripts run from ~/Library/... (launchd + osascript cannot tee into iCloud _logs).
+if [[ "$BIN" != "$PREP" ]]; then
+  export PRICE_LOG_DIR="${BIN}/_logs"
+fi
+LAST_PRICE_LOG="${PRICE_LOG_DIR:-${PREP}/_logs}/price_inbox_last.log"
 
 QUIET_SEC="${PRICE_INBOX_QUIET_SEC:-120}"
 POLL_SEC="${PRICE_INBOX_POLL_SEC:-10}"
+FAIL_COOLDOWN_SEC="${PRICE_INBOX_FAIL_COOLDOWN_SEC:-3600}"
 
 mkdir -p "${BIN}/_logs" "${PREP}/_logs"
 exec >>"$LOG" 2>&1
@@ -144,6 +151,7 @@ release_lock() {
 
 last_snap=""
 last_change_epoch=""
+fail_quiet_until=0
 debug_tick=0
 
 while true; do
@@ -163,16 +171,18 @@ while true; do
   if [[ "$snap" != "$last_snap" ]]; then
     last_snap=$snap
     last_change_epoch=$now
+    fail_quiet_until=0
     echo "[$(date -Iseconds)] inbox snapshot changed"
   fi
 
-  if inbox_has_boards && [[ -n "${last_change_epoch:-}" ]]; then
+  if inbox_has_boards && [[ -n "${last_change_epoch:-}" ]] && [[ "$now" -ge "$fail_quiet_until" ]]; then
     idle=$((now - last_change_epoch))
     if [[ "$idle" -ge "$QUIET_SEC" ]]; then
       echo "[$(date -Iseconds)] quiet for ${idle}s with boards present — acquiring lock"
       acquire_lock
       echo "[$(date -Iseconds)] lock acquired; starting price_boards_from_inbox.sh (caffeinate)"
-      send_msg "Fins & Pins pricing: started on Steve's Mac (boards detected in BoardsToPrice). You'll get another message when the run finishes and has been pushed to GitHub."
+      # Do not block the pipeline on Messages (timeouts would delay pricing and log writes).
+      ( send_msg "Fins & Pins pricing: started on Steve's Mac (boards detected in BoardsToPrice). You'll get another message when the run finishes and has been pushed to GitHub." ) &
 
       set +e
       # Best-effort: keep the Mac awake while the long pricing pipeline runs (lid may be closed).
@@ -184,6 +194,7 @@ while true; do
       echo "[$(date -Iseconds)] lock released (exit ${rc})"
 
       if [[ "$rc" -eq 0 ]]; then
+        fail_quiet_until=0
         url=""
         if [[ -f "$LAST_PRICE_LOG" ]]; then
           url=$(grep 'Harness:' "$LAST_PRICE_LOG" | tail -1 | sed 's/.*Harness: //' || true)
@@ -193,6 +204,8 @@ while true; do
           "${url:-Harness URL not found in log - open the PreparingInventory Lexi index on GitHub Pages.}" \
           "The harness link often works within ~10-15 minutes on finsandpins.github.io.")"
       else
+        fail_quiet_until=$((now + FAIL_COOLDOWN_SEC))
+        echo "[$(date -Iseconds)] pricing failed (exit ${rc}); no new runs until $(date -r "$fail_quiet_until" "+%Y-%m-%d %H:%M:%S %z") (${FAIL_COOLDOWN_SEC}s cooldown, or sooner if the inbox snapshot changes)"
         send_msg "$(printf '%s\n\n%s\n\n%s' \
           "Fins & Pins pricing: FAILED (automation exit ${rc})." \
           "You don't need to debug anything. Wait a few minutes, then upload the board photos to BoardsToPrice again - that will start a fresh run." \
@@ -201,9 +214,10 @@ while true; do
 
       # Reset debounce so we only react to the next upload wave.
       last_snap=$(inbox_snapshot)
-      if inbox_has_boards; then
+      if [[ "$rc" -eq 0 ]] && inbox_has_boards; then
         last_change_epoch=$(date +%s)
       else
+        # After failure (or empty inbox), require a new snapshot change before quiet-timer restarts.
         last_change_epoch=""
       fi
     fi

@@ -36,11 +36,13 @@ def _buddy_handles() -> list[str]:
 def _send_to_buddy(handle: str, body: str) -> int:
     h = applescript_escape(handle)
     b = applescript_escape(body)
-    script = f'''tell application "Messages"
-  set svc to first service whose service type is iMessage
-  set b to buddy "{h}" of svc
-  send "{b}" to b
-end tell'''
+    script = f'''with timeout of 120 seconds
+  tell application "Messages"
+    set svc to first service whose service type is iMessage
+    set b to buddy "{h}" of svc
+    send "{b}" to b
+  end tell
+end timeout'''
     r = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
     if r.returncode != 0:
         print(r.stderr or r.stdout, file=sys.stderr)
