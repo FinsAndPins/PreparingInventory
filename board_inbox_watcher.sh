@@ -103,7 +103,7 @@ bridge_pull_icloud_inbox_to_scan_dir() {
 on run argv
   set src to item 1 of argv
   set dst to item 2 of argv
-  do shell script "/usr/bin/rsync -a " & quoted form of src & " " & quoted form of dst
+  do shell script "/usr/bin/rsync -a --delete " & quoted form of src & " " & quoted form of dst
 end run
 OSA
 }
