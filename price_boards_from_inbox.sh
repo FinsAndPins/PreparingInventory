@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Drop board photos into BoardsToPrice/ (JPEG or HEIC), then run this (or double-click RunBoardsPricing.command).
 # HEIC/HEIF in the inbox top level are converted to .JPG with macOS sips, then originals are removed.
-# Renames inbox → PriceCollection_YYYYMMDD_HHMM, runs Roboflow + eBay + Lexi harness, recreates empty BoardsToPrice,
+# Renames inbox → PriceCollection_YYYYMMDD_HHMM, runs Roboflow + eBay + Lexi harness, recreates empty inbox,
 # then commits and pushes only the new collection + BoardsToPrice (aborts if other staged changes exist).
+# When BOARD_INBOX_DIR (mirror) is used, canonical iCloud BoardsToPrice still holds duplicate uploads until we clear it here.
 #
 # Optional env:
 #   PIN_PRICING_STUDY_MVP  — PinPricingStudyMVP path (default: iCloud Cursor Projects)
@@ -14,6 +15,8 @@
 #     EBAY_NO_AUTO_LARGE_RUN=1  — disable auto pacing for large crop counts
 #   EBAY_CHECKPOINT_EVERY  — write candidates.checkpoint.json every N crops (default 50; 0=off)
 #   BOARD_INBOX_DIR      — optional absolute path to local mirror inbox (launchd); default is ${PREP}/BoardsToPrice
+#                        — after a successful pipeline, canonical ${PREP}/BoardsToPrice/ is cleared of board images
+#                          so iCloud drop zone is empty for the next Lexi upload.
 #
 set -euo pipefail
 set +H
@@ -41,6 +44,20 @@ fi
 log() {
   local msg="[$(date -Iseconds)] $*"
   echo "$msg" | tee -a "$LOG_FILE"
+}
+
+# Remove board photos from canonical iCloud BoardsToPrice (Lexi drop zone). Mirror mode copies into
+# BOARD_INBOX_DIR first, so these files are duplicates once the collection exists — clear so the next wave is obvious.
+clear_canonical_boards_to_price_drop_zone() {
+  local btp="${PREP}/BoardsToPrice"
+  [[ -d "$btp" ]] || return 0
+  find "$btp" -maxdepth 1 -type f \
+    \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.JPG' -o -iname '*.JPEG' \
+    -o -iname '*.heic' -o -iname '*.HEIC' -o -iname '*.heif' -o -iname '*.HEIF' \) \
+    ! -name '.gitkeep' -delete 2>/dev/null || true
+  rm -f "${btp}/.DS_Store" 2>/dev/null || true
+  mkdir -p "$btp"
+  touch "${btp}/.gitkeep"
 }
 
 if [[ ! -x "$PY" ]] || [[ ! -f "$PL" ]]; then
@@ -172,6 +189,11 @@ Open this file after push; Pages can take a minute to refresh.
 EOF
 log "Wrote ${dst}/SHARE_LEXI_URL.txt"
 log "Harness: ${PAGES_URL}"
+
+if [[ -n "${BOARD_INBOX_DIR:-}" ]]; then
+  log "Clearing canonical BoardsToPrice (${PREP}/BoardsToPrice) after successful pipeline (mirror inbox — remove duplicate iCloud copies)."
+  clear_canonical_boards_to_price_drop_zone
+fi
 
 if [[ "${SKIP_GIT:-0}" == "1" ]]; then
   log "SKIP_GIT=1 — not committing. After a successful run: cd \"$PREP\" && PREP_REPO_ROOT=\"$PREP\" python3 update_pricing_index.py && git add \"$NEWNAME\" BoardsToPrice pricing_index.json index.html update_pricing_index.py && git commit && git push"
