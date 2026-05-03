@@ -13,6 +13,7 @@
 #     EBAY_MAX_RETRIES  EBAY_BACKOFF_CAP_SEC  EBAY_CIRCUIT_429_THRESHOLD  EBAY_CIRCUIT_COOLDOWN_SEC
 #     EBAY_NO_AUTO_LARGE_RUN=1  — disable auto pacing for large crop counts
 #   EBAY_CHECKPOINT_EVERY  — write candidates.checkpoint.json every N crops (default 50; 0=off)
+#   BOARD_INBOX_DIR      — optional absolute path to local mirror inbox (launchd); default is ${PREP}/BoardsToPrice
 #
 set -euo pipefail
 set +H
@@ -23,7 +24,8 @@ if [[ -n "${PREP:-}" ]] && [[ -d "${PREP}" ]]; then
 else
   PREP="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 fi
-INBOX="${PREP}/BoardsToPrice"
+# LaunchAgent sets BOARD_INBOX_DIR to a local mirror; rsync into iCloud BoardsToPrice is often blocked.
+INBOX="${BOARD_INBOX_DIR:-${PREP}/BoardsToPrice}"
 PIN="${PIN_PRICING_STUDY_MVP:-${HOME}/Library/Mobile Documents/com~apple~CloudDocs/Cursor Projects/PinPricingStudyMVP}"
 PY="${PIN}/.venv/bin/python"
 PL="${PIN}/run_visual_baseline_pipeline.py"
@@ -32,6 +34,9 @@ LOG_DIR="${PRICE_LOG_DIR:-${PREP}/_logs}"
 LOG_FILE="${LOG_DIR}/price_inbox_last.log"
 
 mkdir -p "$LOG_DIR" "$INBOX"
+if [[ "$INBOX" != "${PREP}/BoardsToPrice" ]]; then
+  mkdir -p "${PREP}/BoardsToPrice"
+fi
 
 log() {
   local msg="[$(date -Iseconds)] $*"
@@ -91,10 +96,14 @@ while [[ -e "${PREP}/${NEWNAME}" ]]; do
   suffix=$((suffix + 1))
 done
 
-log "Renaming BoardsToPrice → ${NEWNAME} (${board_count} boards)"
+log "Renaming inbox → ${NEWNAME} (${board_count} boards) [inbox=${INBOX}]"
 mv "$INBOX" "${PREP}/${NEWNAME}"
 mkdir -p "$INBOX"
 touch "${INBOX}/.gitkeep"
+if [[ "$INBOX" != "${PREP}/BoardsToPrice" ]]; then
+  mkdir -p "${PREP}/BoardsToPrice"
+  touch "${PREP}/BoardsToPrice/.gitkeep"
+fi
 
 COL_DIR="${PREP}/${NEWNAME}"
 STAGE="${COL_DIR}/_staged_boards"
