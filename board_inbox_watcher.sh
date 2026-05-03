@@ -95,31 +95,22 @@ _board_find_board_files() {
     ! -name '.gitkeep' ! -name '.DS_Store' 2>/dev/null "$@"
 }
 
-# launchd cannot list ~/Library/Mobile Documents/...; pull from canonical BoardsToPrice via osascript.
-# Do NOT use --delete on pull: if rsync cannot read the iCloud side it may treat the source as empty and
-# would wipe the mirror; log failures instead of swallowing them.
+# Pull canonical iCloud BoardsToPrice → local mirror so launchd can see uploads.
+# - Do NOT use rsync here: on CloudDocs placeholders it often fails with
+#   "mmap: Resource deadlock avoided" while files are still evicted / downloading.
+# - Run in bash (not osascript): same FDA as the watcher; avoids nested TCC quirks.
+# - ditto copies without rsync's mmap path; no --delete (never wipe mirror on partial read).
 bridge_pull_icloud_inbox_to_scan_dir() {
   [[ -n "${BOARD_INBOX_DIR:-}" ]] || return 0
   mkdir -p "${BOARD_INBOX_DIR}"
-  local msg
-  msg=$(/usr/bin/osascript - "${PREP}/BoardsToPrice/" "${BOARD_INBOX_DIR}/" <<'OSABRIDGE' 2>&1
-on run argv
-  set src to item 1 of argv
-  set dst to item 2 of argv
-  try
-    do shell script "/usr/bin/rsync -a " & quoted form of src & " " & quoted form of dst
-    return "OK"
-  on error errMsg number errNum
-    return "ERR " & errNum & " " & errMsg
-  end try
-end run
-OSABRIDGE
-  ) || true
-  # osascript often ends with a newline; avoid false WARN when the pull succeeded.
-  msg="${msg//$'\r'/}"
-  msg="${msg%"$'\n'"}"
-  if [[ "$msg" != "OK" ]]; then
-    echo "[$(date -Iseconds)] WARN bridge_pull: ${msg}"
+  local src="${PREP}/BoardsToPrice"
+  if [[ ! -d "$src" ]]; then
+    return 0
+  fi
+  local out ec=0
+  out=$(/usr/bin/ditto "$src/" "${BOARD_INBOX_DIR}/" 2>&1) || ec=$?
+  if [[ "$ec" -ne 0 ]]; then
+    echo "[$(date -Iseconds)] WARN bridge_pull: ditto exit ${ec}: ${out}"
   fi
 }
 
