@@ -14,7 +14,10 @@ mkdir -p "${PREP}/_logs" "${BIN}/_logs" "${BOARD_INBOX}" "$(dirname "$LAUNCHER")
 
 cp -f "${PREP}/board_inbox_watcher.sh" "${PREP}/price_boards_from_inbox.sh" "${PREP}/lexi_send_imessage.py" "$BIN/"
 chmod +x "${BIN}/board_inbox_watcher.sh" "${BIN}/price_boards_from_inbox.sh" "${BIN}/lexi_send_imessage.py"
-/usr/bin/rsync -a --delete "${PREP}/BoardsToPrice/" "${BOARD_INBOX}/" 2>/dev/null || true
+# Do not use --delete here: if iCloud BoardsToPrice is unreadable, rsync could treat the
+# source as empty and wipe the mirror. The watcher pulls without --delete as well.
+echo "Seeding mirror from BoardsToPrice (rsync -a, no --delete)…"
+/usr/bin/rsync -a "${PREP}/BoardsToPrice/" "${BOARD_INBOX}/" || echo "WARN: seed rsync failed (iCloud busy or permissions). The watcher will retry each poll."
 if [[ -f "${PREP}/LEXI_NOTIFY.env" ]]; then
   cp -f "${PREP}/LEXI_NOTIFY.env" "$BIN/"
   echo "Copied LEXI_NOTIFY.env to watcher bin (launchd cannot read env from iCloud)."

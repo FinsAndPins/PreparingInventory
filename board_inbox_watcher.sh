@@ -96,16 +96,31 @@ _board_find_board_files() {
 }
 
 # launchd cannot list ~/Library/Mobile Documents/...; pull from canonical BoardsToPrice via osascript.
+# Do NOT use --delete on pull: if rsync cannot read the iCloud side it may treat the source as empty and
+# would wipe the mirror; log failures instead of swallowing them.
 bridge_pull_icloud_inbox_to_scan_dir() {
   [[ -n "${BOARD_INBOX_DIR:-}" ]] || return 0
   mkdir -p "${BOARD_INBOX_DIR}"
-  /usr/bin/osascript - "${PREP}/BoardsToPrice/" "${BOARD_INBOX_DIR}/" <<'OSA' 2>/dev/null || true
+  local msg
+  msg=$(/usr/bin/osascript - "${PREP}/BoardsToPrice/" "${BOARD_INBOX_DIR}/" <<'OSABRIDGE' 2>&1
 on run argv
   set src to item 1 of argv
   set dst to item 2 of argv
-  do shell script "/usr/bin/rsync -a --delete " & quoted form of src & " " & quoted form of dst
+  try
+    do shell script "/usr/bin/rsync -a " & quoted form of src & " " & quoted form of dst
+    return "OK"
+  on error errMsg number errNum
+    return "ERR " & errNum & " " & errMsg
+  end try
 end run
-OSA
+OSABRIDGE
+  ) || true
+  # osascript often ends with a newline; avoid false WARN when the pull succeeded.
+  msg="${msg//$'\r'/}"
+  msg="${msg%"$'\n'"}"
+  if [[ "$msg" != "OK" ]]; then
+    echo "[$(date -Iseconds)] WARN bridge_pull: ${msg}"
+  fi
 }
 
 run_price_pipeline() {
