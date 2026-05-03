@@ -7,7 +7,8 @@
 # interactive "press Return" at the end).
 #
 # Setup:
-#   1) Copy LEXI_NOTIFY.example.env → LEXI_NOTIFY.env (gitignored), set LEXI_IMESSAGE_HANDLE.
+#   1) Copy LEXI_NOTIFY.example.env → LEXI_NOTIFY.env (gitignored); set LEXI_IMESSAGE_HANDLE
+#      or PRICING_NOTIFY_HANDLES (space-separated — same texts to each).
 #   2) Grant Messages automation for the parent process (Terminal or launchd).
 #   3) Load launchd/com.finsandpins.BoardsInboxWatcher.plist (see README).
 #

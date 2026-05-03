@@ -2,13 +2,17 @@
 """
 Send a single iMessage via the Messages app (osascript).
 
-Reads message body from stdin (UTF-8). Expects env LEXI_IMESSAGE_HANDLE to the
-buddy handle (phone +E.164, Apple ID email, or how Messages shows the contact).
+Reads message body from stdin (UTF-8). Sends the same text to one or more buddies.
+
+Recipients (first that applies):
+  PRICING_NOTIFY_HANDLES — space-separated buddy handles (phone +E.164, Apple ID
+    email, or how Messages shows each contact). Everyone gets the same message.
+  else LEXI_IMESSAGE_HANDLE — single buddy (backward compatible).
 
 Requires macOS automation permission for whatever runs this script (Terminal,
 bash from launchd, etc.) to control Messages — one-time prompt in System Settings.
 
-If LEXI_IMESSAGE_HANDLE is unset, exits 0 without sending (silent skip).
+If no handle is configured, exits 0 without sending (silent skip).
 """
 from __future__ import annotations
 
@@ -21,14 +25,15 @@ def applescript_escape(s: str) -> str:
     return s.replace("\\", "\\\\").replace('"', '\\"')
 
 
-def main() -> int:
-    handle = (os.environ.get("LEXI_IMESSAGE_HANDLE") or "").strip()
-    if not handle:
-        print("lexi_send_imessage: LEXI_IMESSAGE_HANDLE unset; skip", file=sys.stderr)
-        return 0
-    body = sys.stdin.read()
-    if not body.strip():
-        return 0
+def _buddy_handles() -> list[str]:
+    multi = (os.environ.get("PRICING_NOTIFY_HANDLES") or "").strip()
+    if multi:
+        return [h for h in multi.split() if h]
+    one = (os.environ.get("LEXI_IMESSAGE_HANDLE") or "").strip()
+    return [one] if one else []
+
+
+def _send_to_buddy(handle: str, body: str) -> int:
     h = applescript_escape(handle)
     b = applescript_escape(body)
     script = f'''tell application "Messages"
@@ -40,6 +45,22 @@ end tell'''
     if r.returncode != 0:
         print(r.stderr or r.stdout, file=sys.stderr)
         return r.returncode
+    return 0
+
+
+def main() -> int:
+    handles = _buddy_handles()
+    if not handles:
+        print("lexi_send_imessage: no PRICING_NOTIFY_HANDLES or LEXI_IMESSAGE_HANDLE; skip", file=sys.stderr)
+        return 0
+    body = sys.stdin.read()
+    if not body.strip():
+        return 0
+    last = 0
+    for handle in handles:
+        last = _send_to_buddy(handle, body)
+        if last != 0:
+            return last
     return 0
 
 
