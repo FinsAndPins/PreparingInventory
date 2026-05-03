@@ -14,6 +14,27 @@ After each successful **`price_boards_from_inbox.sh`** run, the script runs **`u
 
 Put board photos in **`BoardsToPrice/`** (repo root). **JPEG** and **HEIC/HEIF** (iPhone) in that folder’s **top level** are accepted: HEIC is converted to **`.JPG`** with **macOS `sips`**, then the HEIC file is removed, before Roboflow/eBay staging. The Python pipeline is unchanged.
 
+### Lexi overnight: `board_inbox_watcher.sh` + iMessage + `launchd`
+
+For **hands-off** runs when Steve is not at the machine: a long-lived watcher polls **`BoardsToPrice/`**, waits **`PRICE_INBOX_QUIET_SEC`** (default **120** seconds) with no file changes, then runs **`price_boards_from_inbox.sh`** under **`caffeinate -dimsu`** (best-effort wakefulness; **no guarantee** if the MacBook lid is closed without clamshell power).
+
+**Queueing:** If Lexi uploads **while** a run is in progress, those files wait on disk. When the run finishes and the watcher **releases its lock**, it starts a **new** quiet window for whatever accumulated, so she does not need to coordinate interleaving.
+
+**iMessage:** Copy **`LEXI_NOTIFY.example.env`** → **`LEXI_NOTIFY.env`** (gitignored) and set **`LEXI_IMESSAGE_HANDLE`** to the address Messages uses for Lexi on this Mac (phone email or Apple ID). Lexi gets one text when a run **starts**, one when it **finishes** (includes harness URL from **`_logs/price_inbox_last.log`** and a note that GitHub Pages can lag ~10–15 minutes), and one on **failure** with “re-upload later” guidance (no debugging burden on her). First run: grant **Automation** for **Messages** (and **Accessibility** if macOS prompts) for **Terminal** if you start the watcher manually, or for **`launchd`** after you load the plist below.
+
+**Install `launchd` (template):** Edit **`launchd/com.finsandpins.BoardsInboxWatcher.plist`** and replace **`FULL_PATH_TO_PREPARING_INVENTORY`** with the absolute path to this repo root (three occurrences: **WorkingDirectory** and both log paths). Copy to a stable location (for example **`~/Library/LaunchAgents/`**), then:
+
+```bash
+launchctl unload ~/Library/LaunchAgents/com.finsandpins.BoardsInboxWatcher.plist 2>/dev/null
+launchctl load ~/Library/LaunchAgents/com.finsandpins.BoardsInboxWatcher.plist
+```
+
+Ensure **`board_inbox_watcher.sh`** is executable (`chmod +x board_inbox_watcher.sh`). Logs: **`_logs/boards_watcher.log`**, **`_logs/launchd_boards_watcher.log`**, **`_logs/launchd_boards_watcher.err.log`**.
+
+**Stale lock:** If a run crashes hard and **`_logs/boards_watcher_active.lockdir`** is left behind with **no** pricing process running, remove that directory once (`rmdir _logs/boards_watcher_active.lockdir`) so the watcher can run again.
+
+**Future / v2 ideas:** **`FUTURE.md`**.
+
 ## ClickToPrice — Show 2026-04-16 (shared harness)
 
 - **Open:** [Show20260416/testing_ui_visual_baseline/index.html](https://finsandpins.github.io/PreparingInventory/Show20260416/testing_ui_visual_baseline/index.html)
