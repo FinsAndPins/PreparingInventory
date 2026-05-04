@@ -30,9 +30,9 @@ For **hands-off** runs when Steve is not at the machine: a long-lived watcher po
 
 **If `launchctl load` fails with “Input/output error” (5):** run **`plutil -lint`** on **`~/Library/LaunchAgents/com.finsandpins.BoardsInboxWatcher.plist`**, then re-run the **install** script above (do not point **ProgramArguments** directly at scripts under **`Mobile Documents/`**).
 
-**iCloud inbox vs launchd:** macOS often blocks **launchd** from **listing** files under **`Mobile Documents/`**, so the watcher mirrors **`BoardsToPrice/`** into **`~/Library/Application Support/FinsAndPins/PreparingInventoryBoardsInbox/`** every few seconds (via **`osascript` + `rsync --delete`**) so the mirror matches an **empty** iCloud inbox after you clear it, and watches that folder. The pricing script still runs against the real repo (`PREP`), launched through **`osascript`**. When **`BOARD_INBOX_DIR`** is set, **`price_boards_from_inbox.sh`** reads boards from that **local mirror** (writing into **`Mobile Documents/…/BoardsToPrice`** from automation is often blocked); it then **`mv`**s the collection folder onto **`PREP`** as today and recreates both the mirror and **`BoardsToPrice/`** with **`.gitkeep`**. You still add photos to the repo’s **`BoardsToPrice/`** (iCloud) as before. When the helper scripts run from **`PreparingInventoryWatcherBin/`**, **`price_inbox_last.log`** is written next to **`boards_watcher.log`** under that folder (not under iCloud **`_logs/`**), so **`tee`** does not hit **Operation not permitted**.
+**iCloud inbox vs launchd:** macOS often blocks **launchd** from **listing** files under **`Mobile Documents/`**, so the watcher periodically copies **`BoardsToPrice/`** → **`~/Library/Application Support/FinsAndPins/PreparingInventoryBoardsInbox/`** using **`ditto`** (see **`board_inbox_watcher.sh`** — avoids **`rsync`**/mmap issues on CloudDocs placeholders). The watcher runs **`price_boards_from_inbox.sh`** under **`caffeinate`** as your GUI user (no **`osascript`** wrapper for the pipeline). When **`BOARD_INBOX_DIR`** is set, **`price_boards_from_inbox.sh`** reads boards from that **local mirror** (writing into **`Mobile Documents/…/BoardsToPrice`** from automation is often blocked); it then **`mv`**s the mirror inbox onto **`PREP`** as **`PriceCollection_*`** and recreates the mirror and **`BoardsToPrice/`** with **`.gitkeep`**. You still add photos to the repo’s **`BoardsToPrice/`** (iCloud) as before. The **install** script seeds the mirror once with **`rsync -a`** (no `--delete`). When the helper scripts run from **`PreparingInventoryWatcherBin/`**, **`price_inbox_last.log`** is written next to **`boards_watcher.log`** under that folder (not under iCloud **`_logs/`**), so **`tee`** does not hit **Operation not permitted**.
 
-**After a failed run:** the watcher waits **`PRICE_INBOX_FAIL_COOLDOWN_SEC`** (default **3600** seconds) before trying again, so you do not get repeated failure iMessages while the same boards sit in the inbox. Adding or changing files (new snapshot) clears that cooldown early.
+**After a failed run:** the watcher waits **`PRICE_INBOX_FAIL_COOLDOWN_SEC`** (default **3600** seconds) before trying again, so you do not get repeated failure iMessages while the same boards sit in the inbox. Changing the **set of board files** in the inbox (add/remove/replace; detected by a **stable fingerprint** — basename + size, not mtime) clears the cooldown early. When the cooldown **expires** with the same files still present, the watcher starts a fresh **quiet** window so an automatic retry can run without Lexi re-uploading.
 
 **Logs:** pricing run log stays **`_logs/price_inbox_last.log`** under the repo. Watcher + launchd wrapper logs use **`~/Library/Application Support/FinsAndPins/PreparingInventoryWatcherBin/_logs/`** (`boards_watcher.log`, **`launchd_boards_watcher.log`**, **`launchd_boards_watcher.err.log`**).
 
@@ -82,6 +82,22 @@ git push origin preparing-inventory-pricing-baseline-2026-04-26
 ## Optional env (`price_boards_from_inbox.sh`)
 
 See the header comment in **`price_boards_from_inbox.sh`** for **`POOL_N`**, **`GATE_T`**, **`SKIP_GIT`**, **`EBAY_*`**, and **`EBAY_CHECKPOINT_EVERY`** (periodic **`candidates.checkpoint.json`** during long eBay phases).
+
+## Overnight pricing — what broke and what we fixed (2026-05-03)
+
+These were **software / sync** issues, not bad board photos. Lexi’s uploads were fine; the pipeline or watcher failed for other reasons.
+
+1. **Watcher retry storm** — The inbox “snapshot” used **mtime**, so each **`ditto`** refresh from iCloud could look like a new upload, reset the post-failure cooldown, and start a new **`PriceCollection_*`** every ~2 minutes with no harness. **Fix:** **`board_inbox_watcher.sh`** now fingerprints **basename + file size** (no mtime) and, after a failure, **re-seeds the quiet debounce when the cooldown expires** so one automatic retry can run without re-upload.
+
+2. **`ImportError: DEFAULT_SECONDARY_IOU`** — On disk, **`PinPricingStudyMVP/prediction_dedupe.py`** was a **truncated** copy (single-pass NMS only) while **`run_visual_baseline_pipeline.py`** / **`roboflow_cropping.py`** expected **`DEFAULT_SECONDARY_IOU`**, **`RULE_ID_V2`**, and **`dedupe_predictions_two_pass`**. Under **iCloud**, an editor tab can show the full file while **Python reads whatever is actually on disk** (partial sync, conflict copy, interrupted write). **Fix:** restore the full **`prediction_dedupe.py`** on disk; verify with Terminal:  
+   `grep DEFAULT_SECONDARY_IOU prediction_dedupe.py` and  
+   `.venv/bin/python -c "from prediction_dedupe import DEFAULT_SECONDARY_IOU"`.
+
+3. **`AttributeError: EbayClient.set_browse_trace`** — Same class of drift: **`ebay_api.py`** on disk lagged **`run_visual_baseline_pipeline.py`**, which calls **`set_browse_trace`** in the eBay loop. Roboflow completed; the run died on the first eBay crop. **Fix:** ensure **`EbayClient`** defines **`set_browse_trace`**, **`_browse_trace_suffix`**, and appends the suffix to Browse **labels** in **`search_by_image`** / **`keyword_bin_search`**.
+
+4. **Moving photos in/out** — Not required for the above. Only useful if you want a **clean inbox state** after a stuck half-run; it does not fix import/version skew.
+
+**Where to look first:** **`~/Library/Application Support/FinsAndPins/PreparingInventoryWatcherBin/_logs/boards_watcher.log`** (Python tracebacks) and **`…/price_inbox_last.log`** (script **`log`** lines).
 
 ## Notes
 

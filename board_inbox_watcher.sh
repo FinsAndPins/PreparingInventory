@@ -16,12 +16,13 @@
 #   PRICE_INBOX_QUIET_SEC   default 120 — folder must be unchanged this long
 #   PRICE_INBOX_POLL_SEC    default 10  — how often to rescan
 #   PRICE_INBOX_FAIL_COOLDOWN_SEC  default 3600 — after a failed pricing run, wait this long before
-#                                  trying again (stops iMessage spam while boards stay in the inbox).
+#                                  automatic retry (stops iMessage spam). Adding/removing/changing a
+#                                  board file clears the cooldown immediately (stable snapshot changes).
 #   PIN_PRICING_STUDY_MVP   same as price_boards_from_inbox.sh
 #   LOCAL_WATCHER_BIN     if set, directory with copies of this script, price_boards_from_inbox.sh,
 #                           and lexi_send_imessage.py (launchd cannot run scripts from iCloud paths).
 #   BOARD_INBOX_DIR       optional local folder mirroring BoardsToPrice (set by LaunchAgent launcher);
-#                           rsync from iCloud via osascript so launchd can see files; pricing still runs on PREP.
+#                           ditto from iCloud BoardsToPrice each poll so launchd can see files; pricing still runs on PREP.
 #
 set -uo pipefail
 set +H
@@ -128,11 +129,19 @@ inbox_has_boards() {
 }
 
 inbox_snapshot() {
-  # Hash names + sizes + mtimes of board files at inbox top level.
-  _board_find_board_files -print0 \
-    | sort -z \
-    | xargs -0 stat -f '%N %z %m' 2>/dev/null \
-    | md5 -q 2>/dev/null || echo "empty"
+  # Stable fingerprint: basename + size only (omit mtime). ditto from iCloud refreshes mtimes without
+  # content changes, which used to look like constant "uploads" and cleared the post-failure cooldown.
+  local lines="" f sz
+  while IFS= read -r -d '' f; do
+    [[ -f "$f" ]] || continue
+    sz=$(stat -f %z "$f" 2>/dev/null) || continue
+    lines+=$(printf '%s\t%s\n' "$(basename "$f")" "$sz")
+  done < <(_board_find_board_files -print0 | sort -z)
+  if [[ -z "$lines" ]]; then
+    printf '%s' "empty"
+    return
+  fi
+  printf '%s' "$lines" | LC_ALL=C sort | md5 -q 2>/dev/null || printf '%s' "empty"
 }
 
 acquire_lock() {
@@ -169,11 +178,18 @@ while true; do
   fi
   snap=$(inbox_snapshot)
 
+  # After a failed run last_change_epoch is cleared; when the failure cooldown ends, restart the
+  # quiet debounce so the same boards can retry without Lexi re-uploading.
+  if inbox_has_boards && [[ -z "${last_change_epoch:-}" ]] && (( fail_quiet_until > 0 )) && (( now >= fail_quiet_until )); then
+    last_change_epoch=$now
+    echo "[$(date -Iseconds)] failure cooldown ended (${FAIL_COOLDOWN_SEC}s) — ${QUIET_SEC}s quiet debounce before retry"
+  fi
+
   if [[ "$snap" != "$last_snap" ]]; then
     last_snap=$snap
     last_change_epoch=$now
     fail_quiet_until=0
-    echo "[$(date -Iseconds)] inbox snapshot changed"
+    echo "[$(date -Iseconds)] inbox snapshot changed (board set)"
   fi
 
   if inbox_has_boards && [[ -n "${last_change_epoch:-}" ]] && [[ "$now" -ge "$fail_quiet_until" ]]; then
@@ -206,10 +222,10 @@ while true; do
           "The link usually works within 10-15 minutes.")"
       else
         fail_quiet_until=$((now + FAIL_COOLDOWN_SEC))
-        echo "[$(date -Iseconds)] pricing failed (exit ${rc}); no new runs until $(date -r "$fail_quiet_until" "+%Y-%m-%d %H:%M:%S %z") (${FAIL_COOLDOWN_SEC}s cooldown, or sooner if the inbox snapshot changes)"
+        echo "[$(date -Iseconds)] pricing failed (exit ${rc}); automatic retry after $(date -r "$fail_quiet_until" "+%Y-%m-%d %H:%M:%S %z") (${FAIL_COOLDOWN_SEC}s cooldown, or sooner if the board file set in the inbox changes)"
         send_msg "$(printf '%s\n\n%s\n\n%s' \
           "Fins & Pins pricing: FAILED (automation exit ${rc})." \
-          "You don't need to debug anything. Wait a few minutes, then upload the board photos to BoardsToPrice again - that will start a fresh run." \
+          "You don't need to debug anything. The Mac will retry automatically after a cooldown, or you can add/remove a board photo in BoardsToPrice to start sooner." \
           "Steve can check _logs/price_inbox_last.log on the Mac when he's up.")"
       fi
 
