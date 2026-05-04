@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Drop board photos into BoardsToPrice/ (JPEG or HEIC), then run this (or double-click RunBoardsPricing.command).
+# Drop board photos into BoardsToPrice/ (JPEG, PNG, WebP, TIFF, or HEIC), then run this (or double-click RunBoardsPricing.command).
 # HEIC/HEIF in the inbox top level are converted to .JPG with macOS sips, then originals are removed.
 # Renames inbox → PriceCollection_YYYYMMDD_HHMM, runs Roboflow + eBay + Lexi harness, recreates empty inbox,
 # then commits and pushes only the new collection + BoardsToPrice (aborts if other staged changes exist).
@@ -53,7 +53,10 @@ clear_canonical_boards_to_price_drop_zone() {
   [[ -d "$btp" ]] || return 0
   find "$btp" -maxdepth 1 -type f \
     \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.JPG' -o -iname '*.JPEG' \
-    -o -iname '*.heic' -o -iname '*.HEIC' -o -iname '*.heif' -o -iname '*.HEIF' \) \
+    -o -iname '*.png' -o -iname '*.PNG' \
+    -o -iname '*.heic' -o -iname '*.HEIC' -o -iname '*.heif' -o -iname '*.HEIF' \
+    -o -iname '*.webp' -o -iname '*.WEBP' \
+    -o -iname '*.tif' -o -iname '*.TIF' -o -iname '*.tiff' -o -iname '*.TIFF' \) \
     ! -name '.gitkeep' -delete 2>/dev/null || true
   rm -f "${btp}/.DS_Store" 2>/dev/null || true
   mkdir -p "$btp"
@@ -91,17 +94,20 @@ heic_to_jpeg_in_dir() {
 
 heic_to_jpeg_in_dir "$INBOX"
 
-shopt -s nullglob
 board_count=0
-for p in "${INBOX}"/*.jpg "${INBOX}"/*.jpeg "${INBOX}"/*.JPG "${INBOX}"/*.JPEG; do
-  [[ -f "$p" ]] || continue
-  [[ "$(dirname "$p")" == "$INBOX" ]] || continue
+while IFS= read -r p; do
+  [[ -n "$p" ]] || continue
   board_count=$((board_count + 1))
-done
-shopt -u nullglob
+done < <(
+  find "$INBOX" -maxdepth 1 -type f \
+    \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \
+    -o -iname '*.heic' -o -iname '*.heif' \
+    -o -iname '*.webp' -o -iname '*.tif' -o -iname '*.tiff' \) \
+    ! -name '.gitkeep' ! -name '.DS_Store' 2>/dev/null | LC_ALL=C sort
+)
 
 if [[ "$board_count" -lt 1 ]]; then
-  log "ERROR: Put at least one board photo (jpg/jpeg/heic) in: $INBOX"
+  log "ERROR: Put at least one board photo (jpg/jpeg/png/webp/tiff/heic) in: $INBOX"
   exit 1
 fi
 
@@ -125,20 +131,38 @@ fi
 COL_DIR="${PREP}/${NEWNAME}"
 STAGE="${COL_DIR}/_staged_boards"
 mkdir -p "$STAGE"
-rm -f "${STAGE}"/IMG_*.JPG 2>/dev/null || true
+rm -f "${STAGE}"/IMG_*.* 2>/dev/null || true
 
 heic_to_jpeg_in_dir "$COL_DIR"
 
 i=1
-shopt -s nullglob
-for p in "${COL_DIR}"/*.jpg "${COL_DIR}"/*.jpeg "${COL_DIR}"/*.JPG "${COL_DIR}"/*.JPEG; do
+while IFS= read -r p; do
+  [[ -n "$p" ]] || continue
   [[ -f "$p" ]] || continue
-  [[ "$(dirname "$p")" == "$COL_DIR" ]] || continue
-  cp "$p" "${STAGE}/IMG_${i}.JPG"
+  ext_lower=$(echo "${p##*.}" | tr '[:upper:]' '[:lower:]')
+  case "$ext_lower" in
+    jpg|jpeg) cp "$p" "${STAGE}/IMG_${i}.JPG" ;;
+    png) cp "$p" "${STAGE}/IMG_${i}.PNG" ;;
+    webp) cp "$p" "${STAGE}/IMG_${i}.WEBP" ;;
+    tif|tiff) cp "$p" "${STAGE}/IMG_${i}.TIF" ;;
+    *)
+      log "WARN: skipping unsupported extension in collection dir: $p"
+      continue
+      ;;
+  esac
   i=$((i + 1))
-done
-shopt -u nullglob
+done < <(
+  find "$COL_DIR" -maxdepth 1 -type f \
+    \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \
+    -o -iname '*.heic' -o -iname '*.heif' \
+    -o -iname '*.webp' -o -iname '*.tif' -o -iname '*.tiff' \) \
+    ! -name '.gitkeep' ! -name '.DS_Store' 2>/dev/null | LC_ALL=C sort
+)
 staged=$((i - 1))
+if [[ "${staged:-0}" -lt 1 ]]; then
+  log "ERROR: No board photos were staged to ${STAGE} (supported: jpg/jpeg/png/webp/tif/tiff/heic→jpg)."
+  exit 1
+fi
 log "Staged ${staged} boards → ${STAGE}"
 
 rm -rf "${COL_DIR}/crops" "${COL_DIR}/roboflow" "${COL_DIR}/testing_ui_visual_baseline" 2>/dev/null || true

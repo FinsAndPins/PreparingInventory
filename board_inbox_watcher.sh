@@ -91,7 +91,9 @@ send_msg() {
 # Use find (not shell globs): launchd + iCloud paths often fail glob expansion while find works.
 _board_find_board_files() {
   find "$SCAN_INBOX" -maxdepth 1 -type f \
-    \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.heic' -o -iname '*.heif' \) \
+    \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \
+    -o -iname '*.heic' -o -iname '*.heif' \
+    -o -iname '*.webp' -o -iname '*.tif' -o -iname '*.tiff' \) \
     ! -name '.gitkeep' ! -name '.DS_Store' 2>/dev/null "$@"
 }
 
@@ -201,7 +203,7 @@ while true; do
         send_msg "$(printf '%s\n\n%s\n\n%s' \
           "Fins & Pins pricing: finished and pushed to GitHub." \
           "${url:-Harness URL not found in log - open the PreparingInventory Lexi index on GitHub Pages.}" \
-          "The harness link often works within ~10-15 minutes on finsandpins.github.io.")"
+          "The link usually works within 10-15 minutes.")"
       else
         fail_quiet_until=$((now + FAIL_COOLDOWN_SEC))
         echo "[$(date -Iseconds)] pricing failed (exit ${rc}); no new runs until $(date -r "$fail_quiet_until" "+%Y-%m-%d %H:%M:%S %z") (${FAIL_COOLDOWN_SEC}s cooldown, or sooner if the inbox snapshot changes)"
