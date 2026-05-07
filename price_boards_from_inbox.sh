@@ -236,6 +236,18 @@ else
   log "WARN: python3 or update_pricing_index.py missing — skipping pricing_index.json refresh"
 fi
 
+# Retention policy: keep recent PriceCollection runs on GitHub Pages (untrack older, keep on disk).
+# Defaults: keep 30 days, keep at least 10 newest, prune tracked __build__ dirs immediately.
+if [[ -f "${PREP}/prune_github_retention.py" ]] && command -v python3 >/dev/null 2>&1; then
+  log "Retention prune (GitHub Pages): keep_days=${RETENTION_KEEP_DAYS:-30} keep_min=${RETENTION_KEEP_MIN:-10}"
+  python3 "${PREP}/prune_github_retention.py" \
+    --keep-days "${RETENTION_KEEP_DAYS:-30}" \
+    --keep-min "${RETENTION_KEEP_MIN:-10}" \
+    2>&1 | tee -a "$LOG_FILE" || log "WARN: retention prune failed — continuing without pruning"
+else
+  log "WARN: prune_github_retention.py missing or python3 unavailable — skipping retention prune"
+fi
+
 git add "$NEWNAME" BoardsToPrice
 for f in pricing_index.json index.html update_pricing_index.py; do
   [[ -f "$f" ]] && git add "$f"
