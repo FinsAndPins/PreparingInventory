@@ -3,8 +3,9 @@
 # run price_boards_from_inbox.sh (under caffeinate) and notify Lexi via iMessage.
 #
 # Lexi can drop JPEG/HEIC in the shared iCloud BoardsToPrice folder; when uploads
-# go quiet, this runs the same pipeline as RunBoardsPricing.command (without the
-# interactive "press Return" at the end).
+# go quiet, this runs price_boards_from_inbox.sh (without the interactive "press Return"
+# at the end). Detection defaults to local RF-DETR (Core ML); see run_price_pipeline.
+# Double-click RunBoardsPricing.command still uses the Roboflow API unless you change env.
 #
 # Setup:
 #   1) Copy LEXI_NOTIFY.example.env → LEXI_NOTIFY.env (gitignored); set LEXI_IMESSAGE_HANDLE
@@ -18,7 +19,9 @@
 #   PRICE_INBOX_FAIL_COOLDOWN_SEC  default 3600 — after a failed pricing run, wait this long before
 #                                  automatic retry (stops iMessage spam). Adding/removing/changing a
 #                                  board file clears the cooldown immediately (stable snapshot changes).
-#   PIN_PRICING_STUDY_MVP   same as price_boards_from_inbox.sh
+#   PIN_PRICING_USE_RFDETR   default 1 — RF-DETR (Core ML). Set 0 to use Roboflow API for this watcher.
+#   PIN_PRICING_STUDY_MVP    defaults to PinPricingStudyMVP_RFDETR_TEST when RF-DETR; else PinPricingStudyMVP.
+#   PIN_PRICING_RFDETR_MIN_CONF — optional; default 0.25 (matches Click To Collect app).
 #   LOCAL_WATCHER_BIN     if set, directory with copies of this script, price_boards_from_inbox.sh,
 #                           and lexi_send_imessage.py (launchd cannot run scripts from iCloud paths).
 #   BOARD_INBOX_DIR       optional local folder mirroring BoardsToPrice (set by LaunchAgent launcher);
@@ -121,6 +124,17 @@ run_price_pipeline() {
   # Do not wrap price_boards in osascript "do shell script": that environment cannot write under
   # ~/Library/Mobile Documents/... (e.g. mkdir/touch BoardsToPrice, git), so the run dies right after
   # moving the mirror inbox. launchd already runs this watcher as your GUI user — caffeinate + bash is enough.
+  local icloud_cursor="${HOME}/Library/Mobile Documents/com~apple~CloudDocs/Cursor Projects"
+  local pin_rfdetr="${icloud_cursor}/PinPricingStudyMVP_RFDETR_TEST"
+  local pin_robo="${icloud_cursor}/PinPricingStudyMVP"
+  # Automatic pricing: RF-DETR on-device (override with PIN_PRICING_USE_RFDETR=0 for Roboflow API).
+  export PIN_PRICING_USE_RFDETR="${PIN_PRICING_USE_RFDETR:-1}"
+  if [[ "${PIN_PRICING_USE_RFDETR}" == "0" ]] || [[ "${PIN_PRICING_USE_RFDETR}" == "false" ]] || [[ "${PIN_PRICING_USE_RFDETR}" == "False" ]]; then
+    export PIN_PRICING_STUDY_MVP="${PIN_PRICING_STUDY_MVP:-$pin_robo}"
+  else
+    export PIN_PRICING_STUDY_MVP="${PIN_PRICING_STUDY_MVP:-$pin_rfdetr}"
+    export PIN_PRICING_RFDETR_MIN_CONF="${PIN_PRICING_RFDETR_MIN_CONF:-0.25}"
+  fi
   PREP="$PREP" BOARD_INBOX_DIR="${BOARD_INBOX_DIR:-}" /usr/bin/caffeinate -dimsu -- /bin/bash "$PRICE_SCRIPT"
 }
 

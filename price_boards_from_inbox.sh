@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # Drop board photos into BoardsToPrice/ (JPEG, PNG, WebP, TIFF, or HEIC), then run this (or double-click RunBoardsPricing.command).
 # HEIC/HEIF in the inbox top level are converted to .JPG with macOS sips, then originals are removed.
-# Renames inbox → PriceCollection_YYYYMMDD_HHMM, runs Roboflow + eBay + Lexi harness, recreates empty inbox,
+# Renames inbox → PriceCollection_YYYYMMDD_HHMM, runs pin detection + eBay + Lexi harness, recreates empty inbox,
 # then commits and pushes only the new collection + BoardsToPrice (aborts if other staged changes exist).
 # When BOARD_INBOX_DIR (mirror) is used, canonical iCloud BoardsToPrice still holds duplicate uploads until we clear it here.
 #
 # Optional env:
-#   PIN_PRICING_STUDY_MVP  — PinPricingStudyMVP path (default: iCloud Cursor Projects)
+#   PIN_PRICING_STUDY_MVP  — PinPricingStudyMVP path (default: iCloud Cursor Projects → PinPricingStudyMVP)
+#   PIN_PRICING_USE_RFDETR — set 1 with PinPricingStudyMVP_RFDETR_TEST for local RF-DETR (Core ML).
+#                            Board inbox watcher sets this to 1 by default; RunBoardsPricing.command sets 0 (Roboflow API).
 #   POOL_N, GATE_T        — passed to run_visual_baseline_pipeline.py
 #   SKIP_GIT=1            — skip commit and push
 #   eBay Browse resilience (optional overrides for run_visual_baseline_pipeline.py):
