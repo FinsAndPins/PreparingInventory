@@ -1,0 +1,51 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout required site paths
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .nojekyll
+            index.html
+            pricing_index.json
+            PriceCollection_20260515_1214/testing_ui_visual_baseline
+          sparse-checkout-cone-mode: false
+
+      - name: Assemble site artifact
+        run: |
+          mkdir -p _site/PriceCollection_20260515_1214
+          cp -R PriceCollection_20260515_1214/testing_ui_visual_baseline _site/PriceCollection_20260515_1214/
+          cp index.html pricing_index.json .nojekyll _site/
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
