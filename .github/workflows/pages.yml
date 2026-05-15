@@ -18,21 +18,41 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout required site paths
+      - name: Checkout repo (root site files only)
         uses: actions/checkout@v4
         with:
+          fetch-depth: 1
           sparse-checkout: |
             .nojekyll
             index.html
             pricing_index.json
-            PriceCollection_20260515_1214/testing_ui_visual_baseline
           sparse-checkout-cone-mode: false
+
+      - name: Sparse-add every PriceCollection testing UI
+        run: |
+          set -euo pipefail
+          added=0
+          while IFS= read -r d; do
+            base="${d}/testing_ui_visual_baseline"
+            if git cat-file -e "HEAD:${base}" 2>/dev/null; then
+              git sparse-checkout add "$base"
+              added=$((added+1))
+            fi
+          done < <(git ls-tree --name-only HEAD | grep '^PriceCollection_' || true)
+          echo "Sparse-added ${added} testing_ui_visual_baseline path(s)."
 
       - name: Assemble site artifact
         run: |
-          mkdir -p _site/PriceCollection_20260515_1214
-          cp -R PriceCollection_20260515_1214/testing_ui_visual_baseline _site/PriceCollection_20260515_1214/
+          mkdir -p _site
           cp index.html pricing_index.json .nojekyll _site/
+          for baseline in PriceCollection_*/testing_ui_visual_baseline; do
+            if [ -d "$baseline" ]; then
+              collection="${baseline%/testing_ui_visual_baseline}"
+              mkdir -p "_site/$collection"
+              cp -R "$baseline" "_site/$collection/"
+            fi
+          done
+          echo "Site size:" && du -sh _site
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
