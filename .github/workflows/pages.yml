@@ -33,13 +33,15 @@ jobs:
           set -euo pipefail
           added=0
           while IFS= read -r d; do
-            base="${d}/testing_ui_visual_baseline"
-            if git cat-file -e "HEAD:${base}" 2>/dev/null; then
-              git sparse-checkout add "$base"
-              added=$((added+1))
-            fi
+            for suffix in testing_ui_visual_baseline testing_ui_visual_baseline_with_ctr_clicks; do
+              base="${d}/${suffix}"
+              if git cat-file -e "HEAD:${base}" 2>/dev/null; then
+                git sparse-checkout add "$base"
+                added=$((added+1))
+              fi
+            done
           done < <(git ls-tree --name-only HEAD | grep '^PriceCollection_' || true)
-          echo "Sparse-added ${added} testing_ui_visual_baseline path(s)."
+          echo "Sparse-added ${added} testing UI path(s)."
 
       - name: Assemble site artifact
         run: |
@@ -50,6 +52,13 @@ jobs:
               collection="${baseline%/testing_ui_visual_baseline}"
               mkdir -p "_site/$collection"
               cp -R "$baseline" "_site/$collection/"
+            fi
+          done
+          for with_ctr in PriceCollection_*/testing_ui_visual_baseline_with_ctr_clicks; do
+            if [ -d "$with_ctr" ]; then
+              collection="${with_ctr%/testing_ui_visual_baseline_with_ctr_clicks}"
+              mkdir -p "_site/$collection"
+              cp -R "$with_ctr" "_site/$collection/"
             fi
           done
           echo "Site size:" && du -sh _site
