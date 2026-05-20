@@ -33,7 +33,7 @@ jobs:
           set -euo pipefail
           added=0
           while IFS= read -r d; do
-            for suffix in testing_ui_visual_baseline testing_ui_visual_baseline_with_ctr_clicks; do
+            for suffix in testing_ui_visual_baseline testing_ui_visual_baseline_with_ctr_clicks testing_ui_visual_baseline_with_live_ctr; do
               base="${d}/${suffix}"
               if git cat-file -e "HEAD:${base}" 2>/dev/null; then
                 git sparse-checkout add "$base"
@@ -59,6 +59,13 @@ jobs:
               collection="${with_ctr%/testing_ui_visual_baseline_with_ctr_clicks}"
               mkdir -p "_site/$collection"
               cp -R "$with_ctr" "_site/$collection/"
+            fi
+          done
+          for with_live_ctr in PriceCollection_*/testing_ui_visual_baseline_with_live_ctr; do
+            if [ -d "$with_live_ctr" ]; then
+              collection="${with_live_ctr%/testing_ui_visual_baseline_with_live_ctr}"
+              mkdir -p "_site/$collection"
+              cp -R "$with_live_ctr" "_site/$collection/"
             fi
           done
           echo "Site size:" && du -sh _site
