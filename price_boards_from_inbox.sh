@@ -206,6 +206,11 @@ if [[ ! -f "${dst}/candidates.json" ]] || [[ ! -f "${dst}/testing_ui_visual_base
   exit 1
 fi
 
+if [[ -f "${PREP}/patch_harness_ctp_scroll.py" ]] && command -v python3 >/dev/null 2>&1; then
+  python3 "${PREP}/patch_harness_ctp_scroll.py" "${dst}/testing_ui_visual_baseline" 2>&1 | tee -a "$LOG_FILE" \
+    || log "WARN: patch_harness_ctp_scroll.py failed — ClickToPrice list may jump to top after Use this"
+fi
+
 PAGES_URL="https://finsandpins.github.io/PreparingInventory/${NEWNAME}/testing_ui_visual_baseline/index.html"
 cat > "${dst}/SHARE_LEXI_URL.txt" << EOF
 Lexi harness (GitHub Pages):
