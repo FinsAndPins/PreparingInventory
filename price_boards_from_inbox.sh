@@ -19,6 +19,8 @@
 #   BOARD_INBOX_DIR      — optional absolute path to local mirror inbox (launchd); default is ${PREP}/BoardsToPrice
 #                        — after a successful pipeline, canonical ${PREP}/BoardsToPrice/ is cleared of board images
 #                          so iCloud drop zone is empty for the next Lexi upload.
+#   PRICE_LOG_DIR        — writable log dir (launchd sets this under Application Support).
+#   PIN_PRICING_STUDY_MVP — PinPricingStudyMVP path; launchd should use Application Support copy (not iCloud .venv).
 #
 set -euo pipefail
 set +H
@@ -48,6 +50,90 @@ log() {
   echo "$msg" | tee -a "$LOG_FILE"
 }
 
+log_pipeline_stderr() {
+  local err_file="$1"
+  [[ -f "$err_file" ]] || return 0
+  local line
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -n "$line" ]] || continue
+    log "pipeline stderr: $line"
+  done < "$err_file"
+}
+
+BOARD_MIN_BYTES="${BOARD_MIN_BYTES:-1024}"
+
+board_file_bytes_ok() {
+  local f="$1"
+  local sz
+  sz=$(stat -f %z "$f" 2>/dev/null || echo 0)
+  [[ "$sz" -ge "${BOARD_MIN_BYTES}" ]]
+}
+
+# Reject zero-byte / stub board files (common when iCloud ditto fails mid-download).
+validate_board_file_readable() {
+  local f="$1"
+  local sz
+  sz=$(stat -f %z "$f" 2>/dev/null || echo 0)
+  if ! board_file_bytes_ok "$f"; then
+    log "ERROR: board file too small or unreadable (${sz} bytes): $f"
+    return 1
+  fi
+  return 0
+}
+
+# Failed auto-runs leave empty PriceCollection_* stubs (rename happened, validation failed).
+is_failed_price_collection_stub() {
+  local d="${1:?}"
+  [[ -d "$d" ]] || return 1
+  [[ -f "${d}/candidates.json" ]] && return 1
+  [[ -f "${d}/testing_ui_visual_baseline/index.html" ]] && return 1
+  return 0
+}
+
+remove_failed_price_collection_stub() {
+  local d="${1:?}"
+  is_failed_price_collection_stub "$d" || return 0
+  log "Removing failed PriceCollection stub (no harness): $(basename "$d")"
+  rm -rf "$d"
+}
+
+# If mirror inbox has a stub, try copying the real file from canonical iCloud BoardsToPrice.
+materialize_inbox_board_from_canonical() {
+  local inbox_file="${1:?}"
+  [[ "$INBOX" == "${PREP}/BoardsToPrice" ]] && return 1
+  local canon="${PREP}/BoardsToPrice/$(basename "$inbox_file")"
+  [[ -f "$canon" ]] || return 1
+  if ! board_file_bytes_ok "$canon"; then
+    return 1
+  fi
+  rm -f "$inbox_file" 2>/dev/null || true
+  if /bin/cp -f "$canon" "$inbox_file" 2>/dev/null || /usr/bin/ditto "$canon" "$inbox_file" 2>/dev/null; then
+    board_file_bytes_ok "$inbox_file"
+  else
+    return 1
+  fi
+}
+
+rollback_failed_collection_rename() {
+  local col_dir="${PREP}/${NEWNAME}"
+  [[ -n "${NEWNAME:-}" ]] || return 0
+  [[ -d "$col_dir" ]] || return 0
+  is_failed_price_collection_stub "$col_dir" || return 0
+  log "Rolling back failed rename: restore boards to inbox from ${NEWNAME}"
+  mkdir -p "$INBOX"
+  find "$col_dir" -maxdepth 1 -type f \
+    \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \
+    -o -iname '*.heic' -o -iname '*.heif' \
+    -o -iname '*.webp' -o -iname '*.tif' -o -iname '*.tiff' \) \
+    ! -name '.gitkeep' ! -name '.DS_Store' -print0 2>/dev/null \
+    | while IFS= read -r -d '' f; do
+        [[ -f "$f" ]] || continue
+        mv "$f" "${INBOX}/$(basename "$f")" 2>/dev/null || true
+      done
+  rm -rf "$col_dir"
+  touch "${INBOX}/.gitkeep"
+}
+
 # Remove board photos from canonical iCloud BoardsToPrice (Lexi drop zone). Mirror mode copies into
 # BOARD_INBOX_DIR first, so these files are duplicates once the collection exists — clear so the next wave is obvious.
 clear_canonical_boards_to_price_drop_zone() {
@@ -67,6 +153,11 @@ clear_canonical_boards_to_price_drop_zone() {
 
 if [[ ! -x "$PY" ]] || [[ ! -f "$PL" ]]; then
   log "ERROR: PinPricingStudyMVP not found. Set PIN_PRICING_STUDY_MVP. Expected: $PIN"
+  exit 1
+fi
+
+if ! "$PY" -c "import imagehash; from PIL import Image" 2>/dev/null; then
+  log "ERROR: PinPricing venv not ready at ${PIN} (imagehash/Pillow import failed). Run PreparingInventory/launchd/install_boards_inbox_launchagent.sh to refresh Application Support .venv."
   exit 1
 fi
 
@@ -97,15 +188,24 @@ heic_to_jpeg_in_dir() {
 heic_to_jpeg_in_dir "$INBOX"
 
 board_count=0
-while IFS= read -r p; do
+while IFS= read -r -d '' p; do
   [[ -n "$p" ]] || continue
+  if ! board_file_bytes_ok "$p"; then
+    if materialize_inbox_board_from_canonical "$p"; then
+      log "Materialized $(basename "$p") from canonical BoardsToPrice"
+    fi
+  fi
+  if ! validate_board_file_readable "$p"; then
+    log "ERROR: inbox board not ready (iCloud may still be downloading). Wait and retry: $INBOX"
+    exit 1
+  fi
   board_count=$((board_count + 1))
 done < <(
   find "$INBOX" -maxdepth 1 -type f \
     \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \
     -o -iname '*.heic' -o -iname '*.heif' \
     -o -iname '*.webp' -o -iname '*.tif' -o -iname '*.tiff' \) \
-    ! -name '.gitkeep' ! -name '.DS_Store' 2>/dev/null | LC_ALL=C sort
+    ! -name '.gitkeep' ! -name '.DS_Store' -print0 2>/dev/null
 )
 
 if [[ "$board_count" -lt 1 ]]; then
@@ -117,6 +217,10 @@ base="PriceCollection_$(date +%Y%m%d_%H%M)"
 NEWNAME="$base"
 suffix=1
 while [[ -e "${PREP}/${NEWNAME}" ]]; do
+  if is_failed_price_collection_stub "${PREP}/${NEWNAME}"; then
+    remove_failed_price_collection_stub "${PREP}/${NEWNAME}"
+    break
+  fi
   NEWNAME="${base}_${suffix}"
   suffix=$((suffix + 1))
 done
@@ -141,17 +245,26 @@ i=1
 while IFS= read -r p; do
   [[ -n "$p" ]] || continue
   [[ -f "$p" ]] || continue
+  if ! validate_board_file_readable "$p"; then
+    rollback_failed_collection_rename
+    exit 1
+  fi
   ext_lower=$(echo "${p##*.}" | tr '[:upper:]' '[:lower:]')
+  staged_path=""
   case "$ext_lower" in
-    jpg|jpeg) cp "$p" "${STAGE}/IMG_${i}.JPG" ;;
-    png) cp "$p" "${STAGE}/IMG_${i}.PNG" ;;
-    webp) cp "$p" "${STAGE}/IMG_${i}.WEBP" ;;
-    tif|tiff) cp "$p" "${STAGE}/IMG_${i}.TIF" ;;
+    jpg|jpeg) staged_path="${STAGE}/IMG_${i}.JPG"; cp "$p" "$staged_path" ;;
+    png) staged_path="${STAGE}/IMG_${i}.PNG"; cp "$p" "$staged_path" ;;
+    webp) staged_path="${STAGE}/IMG_${i}.WEBP"; cp "$p" "$staged_path" ;;
+    tif|tiff) staged_path="${STAGE}/IMG_${i}.TIF"; cp "$p" "$staged_path" ;;
     *)
       log "WARN: skipping unsupported extension in collection dir: $p"
       continue
       ;;
   esac
+  if ! validate_board_file_readable "$staged_path"; then
+    rollback_failed_collection_rename
+    exit 1
+  fi
   i=$((i + 1))
 done < <(
   find "$COL_DIR" -maxdepth 1 -type f \
@@ -163,6 +276,7 @@ done < <(
 staged=$((i - 1))
 if [[ "${staged:-0}" -lt 1 ]]; then
   log "ERROR: No board photos were staged to ${STAGE} (supported: jpg/jpeg/png/webp/tif/tiff/heic→jpg)."
+  rollback_failed_collection_rename
   exit 1
 fi
 log "Staged ${staged} boards → ${STAGE}"
@@ -172,8 +286,13 @@ rm -f "${COL_DIR}/candidates.json" "${COL_DIR}/run_timing.json" 2>/dev/null || t
 
 tmp="${NEWNAME}__build_${RANDOM}"
 while [[ -e "${PREP}/${tmp}" ]]; do tmp="${NEWNAME}__build_${RANDOM}"; done
+rm -rf "${PREP}/${tmp}" 2>/dev/null || true
 
-log "Pipeline start run-id=${tmp}"
+pip_err="${LOG_DIR}/pipeline_${tmp}.stderr"
+: >"$pip_err"
+
+log "Pipeline start run-id=${tmp} (PIN=${PIN})"
+set +e
 (
   cd "$PIN" && "$PY" "$PL" \
     --board-photos-dir "$STAGE" \
@@ -183,7 +302,18 @@ log "Pipeline start run-id=${tmp}"
     --gate-t "${GATE_T:-10}" \
     --ebay-checkpoint-every "${EBAY_CHECKPOINT_EVERY:-50}" \
     --build-harness --harness-firebase-collab
-)
+) 2>>"$pip_err"
+pip_rc=$?
+set -e
+if [[ "$pip_rc" -ne 0 ]]; then
+  log "ERROR: pipeline exited ${pip_rc} (run-id=${tmp})"
+  log_pipeline_stderr "$pip_err"
+  exit 1
+fi
+if [[ -s "$pip_err" ]]; then
+  log_pipeline_stderr "$pip_err"
+fi
+rm -f "$pip_err"
 
 src="${PREP}/${tmp}"
 dst="$COL_DIR"
@@ -206,9 +336,16 @@ if [[ ! -f "${dst}/candidates.json" ]] || [[ ! -f "${dst}/testing_ui_visual_base
   exit 1
 fi
 
-if [[ -f "${PREP}/patch_harness_ctp_scroll.py" ]] && command -v python3 >/dev/null 2>&1; then
-  python3 "${PREP}/patch_harness_ctp_scroll.py" "${dst}/testing_ui_visual_baseline" 2>&1 | tee -a "$LOG_FILE" \
-    || log "WARN: patch_harness_ctp_scroll.py failed — ClickToPrice list may jump to top after Use this"
+if command -v python3 >/dev/null 2>&1; then
+  patch_py="${PREP}/patch_harness_ctp_scroll.py"
+  if [[ -f "$patch_py" ]]; then
+    log "Applying ClickToPrice scroll patch (patch_harness_ctp_scroll.py)"
+    if ! python3 "$patch_py" "${dst}/testing_ui_visual_baseline" 2>&1 | tee -a "$LOG_FILE"; then
+      log "WARN: patch_harness_ctp_scroll.py failed — ClickToPrice list may jump to top after Use this"
+    fi
+  else
+    log "WARN: missing ${patch_py} — launchd may be using a stale PreparingInventoryWatcherBin copy; re-run launchd/install_boards_inbox_launchagent.sh"
+  fi
 fi
 
 PAGES_URL="https://finsandpins.github.io/PreparingInventory/${NEWNAME}/testing_ui_visual_baseline/index.html"

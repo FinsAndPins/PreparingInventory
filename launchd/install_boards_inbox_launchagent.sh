@@ -12,7 +12,52 @@ AGENT="${HOME}/Library/LaunchAgents/com.finsandpins.BoardsInboxWatcher.plist"
 
 mkdir -p "${PREP}/_logs" "${BIN}/_logs" "${BOARD_INBOX}" "$(dirname "$LAUNCHER")"
 
+PIN_LOCAL="${HOME}/Library/Application Support/FinsAndPins/PinPricingStudyMVP_RFDETR_TEST"
+PIN_SRC="${HOME}/Library/Mobile Documents/com~apple~CloudDocs/Cursor Projects/PinPricingStudyMVP_RFDETR_TEST"
+if [[ -d "$PIN_SRC" ]]; then
+  echo "Syncing PinPricingStudyMVP_RFDETR_TEST to Application Support (launchd-safe, no iCloud .venv)…"
+  mkdir -p "$PIN_LOCAL"
+  /usr/bin/rsync -a \
+    --exclude '.git/' \
+    --exclude '.venv/' \
+    --exclude '__pycache__/' \
+    --exclude '.pytest_cache/' \
+    --exclude 'crops/' \
+    --exclude 'roboflow/' \
+    "$PIN_SRC/" "$PIN_LOCAL/" \
+    || echo "WARN: PinPricing code rsync failed — re-run install after iCloud sync completes."
+  _pin_local_venv_ready() {
+    [[ -x "${PIN_LOCAL}/.venv/bin/python" ]] \
+      && "${PIN_LOCAL}/.venv/bin/python" -c "import imagehash; from PIL import Image" >/dev/null 2>&1
+  }
+  if ! _pin_local_venv_ready; then
+    echo "Building launchd-safe .venv from iCloud pip freeze (ditto .venv often leaves broken Pillow stubs)…"
+    rm -rf "${PIN_LOCAL}/.venv"
+    if [[ -x "${PIN_SRC}/.venv/bin/pip" ]]; then
+      python3 -m venv "${PIN_LOCAL}/.venv"
+      "${PIN_SRC}/.venv/bin/pip" freeze >"${PIN_LOCAL}/_venv_freeze.txt"
+      "${PIN_LOCAL}/.venv/bin/pip" install --upgrade pip wheel
+      "${PIN_LOCAL}/.venv/bin/pip" install -r "${PIN_LOCAL}/_venv_freeze.txt" \
+        || echo "WARN: pip install from freeze failed — launchd pipeline may exit on import errors."
+      if _pin_local_venv_ready; then
+        echo "Local .venv bootstrapped from iCloud pip freeze."
+      else
+        echo "WARN: local .venv still not import-ready after pip freeze — re-run install after iCloud sync."
+      fi
+    else
+      echo "WARN: iCloud PinPricing .venv missing — open PinPricing in Finder to download, then re-run install."
+    fi
+  else
+    echo "Local .venv ready under Application Support."
+  fi
+else
+  echo "WARN: PinPricing source not found at: $PIN_SRC"
+fi
+
 cp -f "${PREP}/board_inbox_watcher.sh" "${PREP}/price_boards_from_inbox.sh" "${PREP}/lexi_send_imessage.py" "$BIN/"
+if [[ -f "${PREP}/patch_harness_ctp_scroll.py" ]]; then
+  cp -f "${PREP}/patch_harness_ctp_scroll.py" "$BIN/"
+fi
 chmod +x "${BIN}/board_inbox_watcher.sh" "${BIN}/price_boards_from_inbox.sh" "${BIN}/lexi_send_imessage.py"
 # Do not use --delete here: if iCloud BoardsToPrice is unreadable, rsync could treat the
 # source as empty and wipe the mirror. The watcher pulls without --delete as well.
@@ -45,4 +90,4 @@ echo "Installed."
 echo "  Bin copies: $BIN"
 echo "  Launcher:   $LAUNCHER"
 echo "  Agent plist: $AGENT"
-echo "Re-run this script after changing board_inbox_watcher.sh, price_boards_from_inbox.sh, or lexi_send_imessage.py."
+echo "Re-run this script after changing board_inbox_watcher.sh, price_boards_from_inbox.sh, patch_harness_ctp_scroll.py, or lexi_send_imessage.py."
