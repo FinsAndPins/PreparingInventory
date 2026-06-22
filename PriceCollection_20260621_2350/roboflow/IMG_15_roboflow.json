@@ -1,0 +1,84 @@
+{
+  "predictions": [
+    {
+      "x": 781.5936889648438,
+      "y": 2679.4685668945312,
+      "width": 1246.2186279296875,
+      "height": 1751.2030029296875,
+      "confidence": 0.9114953279495239,
+      "class": "pin"
+    },
+    {
+      "x": 849.5155639648438,
+      "y": 908.5780639648438,
+      "width": 1139.9061279296875,
+      "height": 1505.1092529296875,
+      "confidence": 0.8709269165992737,
+      "class": "pin"
+    },
+    {
+      "x": 2126.2498168945312,
+      "y": 2600.7185668945312,
+      "width": 1325.9530029296875,
+      "height": 1779.7498779296875,
+      "confidence": 0.8616546392440796,
+      "class": "pin"
+    },
+    {
+      "x": 2122.3123168945312,
+      "y": 878.0624351501465,
+      "width": 1199.9530029296875,
+      "height": 1554.328010559082,
+      "confidence": 0.8378854393959045,
+      "class": "pin"
+    },
+    {
+      "x": 2204.9999389648438,
+      "y": 2679.4686279296875,
+      "width": 677.2501220703125,
+      "height": 1035.562255859375,
+      "confidence": 0.2733803689479828,
+      "class": "pin"
+    },
+    {
+      "x": 1071.9842834472656,
+      "y": 3006.281005859375,
+      "width": 483.57415771484375,
+      "height": 687.09375,
+      "confidence": 0.27231472730636597,
+      "class": "pin"
+    }
+  ],
+  "image": {
+    "width": 3024,
+    "height": 4032
+  },
+  "_pin_tools_meta": {
+    "pin_dedupe": {
+      "rule_id": "pin_dedupe_nms_v2",
+      "pass1": {
+        "rule_id": "pin_dedupe_nms_v1",
+        "method": "greedy_iou_nms_keep_highest_confidence",
+        "iou_threshold": 0.85,
+        "raw_prediction_count": 6,
+        "deduped_prediction_count": 6,
+        "removed_count": 0
+      },
+      "pass2": {
+        "rule_id": "pin_dedupe_nms_v1",
+        "method": "greedy_iou_nms_keep_highest_confidence",
+        "iou_threshold": 0.42,
+        "raw_prediction_count": 6,
+        "deduped_prediction_count": 6,
+        "removed_count": 0
+      },
+      "iou_primary": 0.85,
+      "iou_secondary": 0.42,
+      "raw_prediction_count": 6,
+      "deduped_prediction_count": 6,
+      "removed_count_pass1": 0,
+      "removed_count_pass2": 0,
+      "removed_count_total": 0
+    }
+  }
+}
