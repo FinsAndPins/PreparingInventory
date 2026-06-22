@@ -182,6 +182,7 @@
       <button class="btn" id="ctpShowNoMatch">Show Only No Match</button>
       <button class="btn" id="ctpShowMatch">Show Only Match</button>
       <button class="btn" id="ctpShowUnreviewed">Show Only Unreviewed</button>
+      <button class="btn" id="ctpShowNonTopSlot">Non-top Slot</button>
     </div>
     <div class="hint" id="ctpProgressLine" style="margin-bottom:10px;font-weight:600">ClickToPrice · All pins: —</div>
     <div class="ctpLayout">
@@ -527,6 +528,7 @@
       if (window.ctpStatusFilter === "match") return p.match_status === "match";
       if (window.ctpStatusFilter === "no_match") return p.match_status === "no_match";
       if (window.ctpStatusFilter === "unreviewed") return !isFinalStatus(p.match_status);
+      if (window.ctpStatusFilter === "non_top_slot") return (window._dinov2SlotMap || {})[p.pin_key] > 0;
       return true;
     }
     function getCtpViewPins() {
@@ -537,6 +539,7 @@
       if (f === "match") return "Match only";
       if (f === "no_match") return "No match only";
       if (f === "unreviewed") return "Unreviewed only";
+      if (f === "non_top_slot") return "Non-top slot";
       return "All pins";
     }
     function updateCtpProgressLine() {
@@ -1586,6 +1589,17 @@
         renderPinList();
         renderCtpPane();
       };
+      document.getElementById("ctpShowNonTopSlot").onclick = () => {
+        window.ctpStatusFilter = "non_top_slot";
+        document.getElementById("ctpShowNonTopSlot").classList.add("active");
+        document.getElementById("ctpShowMatch").classList.remove("active");
+        document.getElementById("ctpShowNoMatch").classList.remove("active");
+        document.getElementById("ctpShowUnreviewed").classList.remove("active");
+        document.getElementById("ctpShowAll").classList.remove("active");
+        document.getElementById("ctpShowNonTopSlot").classList.add("active");
+        renderPinList();
+        renderCtpPane();
+      };
       document.getElementById("mqShowMatch").onclick = () => {
         matchQuickStatusFilter = "match";
         matchQuickIndex = 0;
@@ -1925,6 +1939,20 @@
       }
     }
     start();
-  </script>
+  
+    // ── DINOv2 slot data (injected by AutoMatch patch) ─────────────────────
+    window._dinov2SlotMap = {};  // pin_key → auto_slot (number, or absent if not auto-passed)
+    fetch('../dinov2_scores.json')
+      .then(r => r.json())
+      .then(scores => {
+        if (!Array.isArray(scores)) return;
+        scores.forEach(s => {
+          if (s.pin_key !== undefined && s.auto_slot !== null && s.auto_slot !== undefined) {
+            window._dinov2SlotMap[s.pin_key] = s.auto_slot;
+          }
+        });
+      })
+      .catch(() => {}); // not all runs have dinov2_scores.json
+</script>
 </body>
 </html>
