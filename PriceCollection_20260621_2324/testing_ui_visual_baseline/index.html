@@ -1767,6 +1767,10 @@
       const r = db.ref(`${fbRoot}/pins`);
       const onPinSnap = (snap) => {
         const rec = snap.val();
+        if (rec && !rec.pin_key && snap.key) {
+          const _p = pins.find(pp => pinDomId(pp.pin_key) === snap.key);
+          if (_p) rec.pin_key = _p.pin_key;
+        }
         if (rec && applyPinRecord(rec)) scheduleFbPaint();
       };
       const onPinRemoved = (snap) => {
@@ -1793,7 +1797,13 @@
       const snap = await db.ref(`${fbRoot}/pins`).get();
       if (!snap.exists()) return;
       const m = snap.val() || {};
-      for (const rec of Object.values(m)) applyPinRecord(rec);
+      for (const [_dk, rec] of Object.entries(m)) {
+        if (rec && !rec.pin_key) {
+          const _p = pins.find(pp => pinDomId(pp.pin_key) === _dk);
+          if (_p) rec.pin_key = _p.pin_key;
+        }
+        applyPinRecord(rec);
+      }
       syncBoardTotals();
     }
 
