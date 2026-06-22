@@ -42,9 +42,19 @@ h1{font-size:1.25rem;font-weight:700;color:#f8fafc;margin-bottom:4px}
 .no-match-btn{display:block;width:100%;padding:6px;background:#1e293b;color:#94a3b8;border:none;cursor:pointer;font-size:.78rem;font-weight:600;letter-spacing:.03em;transition:background .15s,color .15s}
 .no-match-btn:hover{background:#7f1d1d;color:#fca5a5}
 @media(max-width:560px){.tier-pins{grid-template-columns:1fr;padding:8px}}
+
+.harness-nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.harness-nav .btn{background:#1b1b1f;border:1px solid #2a2a33;color:#eee;border-radius:10px;padding:8px 10px;cursor:pointer;font-size:.85rem;text-decoration:none;display:inline-block}
+.harness-nav .btn:hover{border-color:#63a4ff;color:#63a4ff}
 </style>
 </head>
 <body>
+<div class="harness-nav">
+  <a href="index.html" class="btn">Overlay</a>
+  <a href="index.html" class="btn">ClickToPrice</a>
+  <a href="index.html" class="btn">ClickToMatch</a>
+  <a href="index.html" class="btn">Batch Review</a>
+</div>
 <h1>DINOv2 Match Review</h1>
 <p class="subtitle">Condition C · threshold 0.82 · PriceCollection_20260621_2324__build_21616 · <span id="nm-count">0</span> marked no-match &nbsp;<span class="fb-status" id="fb-status">Firebase…</span></p>
 
