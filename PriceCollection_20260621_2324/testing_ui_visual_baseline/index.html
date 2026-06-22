@@ -1846,7 +1846,7 @@
       renderPinList();
       renderCtpPane();
       renderBatch();
-      showPage(lastPage || "overlay");
+      showPage({"#overlay":"overlay","#ctp":"ctp","#match":"match","#batch":"batch"}[location.hash] || lastPage || "overlay");
     }
 
     function showBootError(msg, err) {
