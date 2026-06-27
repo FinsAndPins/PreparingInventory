@@ -1,0 +1,84 @@
+{
+  "predictions": [
+    {
+      "x": 1274.453125,
+      "y": 630.78125,
+      "width": 486.8359375,
+      "height": 321.62109375,
+      "confidence": 0.9396923184394836,
+      "class": "pin"
+    },
+    {
+      "x": 1280.46875,
+      "y": 958.203125,
+      "width": 615.7421875,
+      "height": 291.11328125,
+      "confidence": 0.9268352389335632,
+      "class": "pin"
+    },
+    {
+      "x": 1229.765625,
+      "y": 336.015625,
+      "width": 577.5,
+      "height": 292.40234375,
+      "confidence": 0.9177460074424744,
+      "class": "pin"
+    },
+    {
+      "x": 528.9453125,
+      "y": 396.6015625,
+      "width": 580.5078125,
+      "height": 276.93359375,
+      "confidence": 0.9008791446685791,
+      "class": "pin"
+    },
+    {
+      "x": 572.34375,
+      "y": 716.71875,
+      "width": 504.0234375,
+      "height": 333.0078125,
+      "confidence": 0.8345417976379395,
+      "class": "pin"
+    },
+    {
+      "x": 566.7578125,
+      "y": 1002.03125,
+      "width": 627.7734375,
+      "height": 287.4609375,
+      "confidence": 0.8050197958946228,
+      "class": "pin"
+    }
+  ],
+  "image": {
+    "width": 1760,
+    "height": 1320
+  },
+  "_pin_tools_meta": {
+    "pin_dedupe": {
+      "rule_id": "pin_dedupe_nms_v2",
+      "pass1": {
+        "rule_id": "pin_dedupe_nms_v1",
+        "method": "greedy_iou_nms_keep_highest_confidence",
+        "iou_threshold": 0.85,
+        "raw_prediction_count": 7,
+        "deduped_prediction_count": 7,
+        "removed_count": 0
+      },
+      "pass2": {
+        "rule_id": "pin_dedupe_nms_v1",
+        "method": "greedy_iou_nms_keep_highest_confidence",
+        "iou_threshold": 0.42,
+        "raw_prediction_count": 7,
+        "deduped_prediction_count": 6,
+        "removed_count": 1
+      },
+      "iou_primary": 0.85,
+      "iou_secondary": 0.42,
+      "raw_prediction_count": 7,
+      "deduped_prediction_count": 6,
+      "removed_count_pass1": 0,
+      "removed_count_pass2": 1,
+      "removed_count_total": 1
+    }
+  }
+}
