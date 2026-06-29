@@ -1,0 +1,84 @@
+{
+  "predictions": [
+    {
+      "x": 910.775390625,
+      "y": 264.533203125,
+      "width": 255.50830078125,
+      "height": 373.423828125,
+      "confidence": 0.9261703491210938,
+      "class": "pin"
+    },
+    {
+      "x": 567.2373046875,
+      "y": 272.818359375,
+      "width": 277.10888671875,
+      "height": 361.8837890625,
+      "confidence": 0.9153559803962708,
+      "class": "pin"
+    },
+    {
+      "x": 238.05029296875,
+      "y": 708.97265625,
+      "width": 262.7578125,
+      "height": 391.76953125,
+      "confidence": 0.9008791446685791,
+      "class": "pin"
+    },
+    {
+      "x": 564.8701171875,
+      "y": 705.421875,
+      "width": 272.5224609375,
+      "height": 395.912109375,
+      "confidence": 0.896975576877594,
+      "class": "pin"
+    },
+    {
+      "x": 934.447265625,
+      "y": 709.564453125,
+      "width": 292.19970703125,
+      "height": 397.9833984375,
+      "confidence": 0.8766343593597412,
+      "class": "pin"
+    },
+    {
+      "x": 252.9931640625,
+      "y": 258.0234375,
+      "width": 260.0947265625,
+      "height": 299.7451171875,
+      "confidence": 0.6625781655311584,
+      "class": "pin"
+    }
+  ],
+  "image": {
+    "width": 1212,
+    "height": 910
+  },
+  "_pin_tools_meta": {
+    "pin_dedupe": {
+      "rule_id": "pin_dedupe_nms_v2",
+      "pass1": {
+        "rule_id": "pin_dedupe_nms_v1",
+        "method": "greedy_iou_nms_keep_highest_confidence",
+        "iou_threshold": 0.85,
+        "raw_prediction_count": 7,
+        "deduped_prediction_count": 7,
+        "removed_count": 0
+      },
+      "pass2": {
+        "rule_id": "pin_dedupe_nms_v1",
+        "method": "greedy_iou_nms_keep_highest_confidence",
+        "iou_threshold": 0.42,
+        "raw_prediction_count": 7,
+        "deduped_prediction_count": 6,
+        "removed_count": 1
+      },
+      "iou_primary": 0.85,
+      "iou_secondary": 0.42,
+      "raw_prediction_count": 7,
+      "deduped_prediction_count": 6,
+      "removed_count_pass1": 0,
+      "removed_count_pass2": 1,
+      "removed_count_total": 1
+    }
+  }
+}
