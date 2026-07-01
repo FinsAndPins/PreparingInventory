@@ -130,6 +130,7 @@ PINS.forEach((p, i) => {
   const img = document.createElement('img');
   img.src = '../crops/' + encodeURIComponent(p.crop);
   img.loading = 'lazy';
+  img.onerror = function(){ if(p.thumb){this.src=p.thumb;} this.onerror=null; };
 
   const prEl = document.createElement('div');
   prEl.className = 'wi-price';

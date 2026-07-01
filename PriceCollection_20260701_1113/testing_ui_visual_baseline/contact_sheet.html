@@ -66,6 +66,7 @@ PINS.forEach(p => {
   img.loading = 'lazy';
   img.src = '../crops/' + encodeURIComponent(p.crop);
   img.alt = p.title;
+  img.onerror = function(){ if(p.thumb){this.src=p.thumb;} this.onerror=null; };
   const pr = document.createElement('div');
   pr.className = 'price';
   pr.textContent = '$' + (p.price > 0 ? p.price.toFixed(0) : '?');

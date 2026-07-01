@@ -152,6 +152,7 @@ function buildLeftWheel() {
     const img = document.createElement('img');
     img.src = '../crops/' + encodeURIComponent(p.crop);
     img.loading = 'lazy';
+    img.onerror = function(){ if(p.thumb){this.src=p.thumb;} this.onerror=null; };
     const pr = document.createElement('div');
     pr.className = 'wi-price';
     pr.textContent = fmt(p.price);

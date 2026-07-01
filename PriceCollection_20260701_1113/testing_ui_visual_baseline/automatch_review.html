@@ -203,6 +203,7 @@ function makeCard(pin) {
   const li = document.createElement('img');
   li.src = '../crops/' + encodeURIComponent(pin.crop_filename);
   li.loading = 'lazy'; li.alt = 'pin';
+  li.onerror = function(){ if(pin.thumb_url) this.src = pin.thumb_url; this.onerror=null; };
   lb.appendChild(li);
 
   const rb = document.createElement('div'); rb.className = 'ibox';
