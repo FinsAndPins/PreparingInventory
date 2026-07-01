@@ -355,31 +355,24 @@ async function confirmAll() {
   btn.className = 'saving';
   btn.textContent = 'Saving…';
 
-  const now   = Date.now();
-  const fbPfx = db ? ('pin_pricing_tests/' + TEST_RUN_ID + '/' + APPROACH_ID + '/pins') : null;
-  const writes = [];
+  const now    = Date.now();
+  const fbPfx  = db ? ('pin_pricing_tests/' + TEST_RUN_ID + '/' + APPROACH_ID + '/pins') : null;
 
-  for (const pin of ALL_PINS) {
-    const isRej = rejected.has(pin.pin_key);
-    const upd = {
-      auto_match_review:      isRej ? 'rejected' : 'confirmed',
-      auto_match_score:       pin.auto_sim,
-      auto_match_reviewed_at: now,
-      auto_match_original:    true,
-    };
-    if (isRej) {
-      // Return to ClickToMatch queue
-      upd.match_status = 'unreviewed';
+  if (fbPfx && db) {
+    // Single multi-path update — one network round-trip for all pins
+    const multiUpdate = {};
+    for (const pin of ALL_PINS) {
+      const isRej = rejected.has(pin.pin_key);
+      const base  = pin.pin_key + '/';
+      multiUpdate[base + 'auto_match_review']      = isRej ? 'rejected' : 'confirmed';
+      multiUpdate[base + 'auto_match_score']       = pin.auto_sim;
+      multiUpdate[base + 'auto_match_reviewed_at'] = now;
+      multiUpdate[base + 'auto_match_original']    = true;
+      if (isRej) multiUpdate[base + 'match_status'] = 'unreviewed';
     }
-    if (fbPfx && db) {
-      writes.push(
-        db.ref(fbPfx + '/' + pin.pin_key).update(upd)
-          .catch(function(e){ console.warn('write failed', pin.pin_key, e); })
-      );
-    }
+    try { await db.ref(fbPfx).update(multiUpdate); }
+    catch(e) { console.warn('Batch write failed', e); }
   }
-
-  try { await Promise.all(writes); } catch(e) { console.warn('Some writes failed', e); }
 
   document.getElementById('list').style.display = 'none';
   document.getElementById('sort-bar').style.display = 'none';
