@@ -106,7 +106,9 @@ let undoTimer = null;
 function showPin(i) {
   if (i >= queue.length) { showDone(); return; }
   const p = queue[i];
-  document.getElementById('crop-img').src = '../crops/' + encodeURIComponent(p.crop);
+  const cropEl = document.getElementById('crop-img');
+  cropEl.onerror = function(){ this.src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Crect width='120' height='120' fill='%23222'/%3E%3Ctext x='60' y='68' font-size='36' text-anchor='middle' fill='%23555'%3E%3F%3C/text%3E%3C/svg%3E"; this.onerror=null; };
+  cropEl.src = '../crops/' + encodeURIComponent(p.crop);
   document.getElementById('thumb-img').src = p.thumb || '';
   document.getElementById('price-badge').textContent = p.price > 0 ? '$' + p.price.toFixed(0) : '';
   document.getElementById('progress').textContent = (i+1) + ' / ' + queue.length;

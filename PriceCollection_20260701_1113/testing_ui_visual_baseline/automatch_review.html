@@ -203,7 +203,7 @@ function makeCard(pin) {
   const li = document.createElement('img');
   li.src = '../crops/' + encodeURIComponent(pin.crop_filename);
   li.loading = 'lazy'; li.alt = 'pin';
-  li.onerror = function(){ if(pin.thumb_url) this.src = pin.thumb_url; this.onerror=null; };
+  li.onerror = function(){ this.src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Crect width='120' height='120' fill='%23222'/%3E%3Ctext x='60' y='68' font-size='36' text-anchor='middle' fill='%23555'%3E%3F%3C/text%3E%3C/svg%3E"; this.onerror=null; };
   lb.appendChild(li);
 
   const rb = document.createElement('div'); rb.className = 'ibox';
