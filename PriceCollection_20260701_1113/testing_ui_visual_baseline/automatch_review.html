@@ -168,6 +168,33 @@ let undoKey    = null;
 let sortMode   = 'price';
 let confirmed  = false;
 
+// ── Hydrate from Firebase on load ─────────────────────────────────────────────
+(async function hydrateFromFirebase() {
+  if (!db) return;
+  try {
+    const snap = await db.ref(
+      'pin_pricing_tests/' + TEST_RUN_ID + '/' + APPROACH_ID + '/pins'
+    ).once('value');
+    const fbPins = snap.val() || {};
+    let alreadyDone = 0;
+    for (const pin of ALL_PINS) {
+      const fbPin = fbPins[pin.pin_key];
+      if (!fbPin) continue;
+      const rev = fbPin.auto_match_review;
+      if (rev === 'confirmed' || rev === 'rejected') {
+        alreadyDone++;
+        // Remove from ALL_PINS so they don't appear in the list
+        const idx = ALL_PINS.indexOf(pin);
+        if (idx !== -1) ALL_PINS.splice(idx, 1);
+      }
+    }
+    if (alreadyDone > 0) {
+      console.log('Hydrated: ' + alreadyDone + ' already reviewed pins removed');
+      render();
+    }
+  } catch(e) { console.warn('Firebase hydration failed', e); }
+})();
+
 // ── CSS.escape polyfill (iOS Safari <14 safety) ───────────────────────────────
 function esc(s) {
   return (typeof CSS !== 'undefined' && CSS.escape) ? CSS.escape(s)
