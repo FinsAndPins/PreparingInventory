@@ -178,9 +178,13 @@ function buildLeftWheel() {
 function buildRightWheel(pi) {
   rw.innerHTML = '';
   const p = displayPins[pi]; if (!p) return;
-  (p.cands || []).forEach((c, ci) => {
+  // Sort candidates cheapest→most-expensive; keep original slot index for display
+  const sorted = (p.cands || []).map((c, origIdx) => ({...c, origIdx}))
+    .sort((a, b) => (a.p || 0) - (b.p || 0));
+  p._sorted = sorted;
+  sorted.forEach((c, si) => {
     const el = document.createElement('div');
-    el.className = 'wheel-item' + (ci === 0 ? ' selected' : '');
+    el.className = 'wheel-item' + (si === 0 ? ' selected' : '');
     const img = document.createElement('img');
     img.src = c.thumb || '';
     img.loading = 'lazy';
@@ -188,9 +192,9 @@ function buildRightWheel(pi) {
     const pr = document.createElement('div');
     pr.className = 'wi-price'; pr.textContent = fmt(c.p);
     const sl = document.createElement('div');
-    sl.className = 'wi-slot'; sl.textContent = 'S' + ci;
+    sl.className = 'wi-slot'; sl.textContent = 'S' + c.origIdx;
     el.append(img, pr, sl);
-    el.addEventListener('click', () => rw.scrollTo({top: ci*ITEM_H, behavior:'smooth'}));
+    el.addEventListener('click', () => rw.scrollTo({top: si*ITEM_H, behavior:'smooth'}));
     rw.appendChild(el);
   });
   rw.scrollTop = 0; selCand = 0; updateMid();
@@ -198,7 +202,8 @@ function buildRightWheel(pi) {
 
 function updateMid() {
   const p = displayPins[selPin]; if (!p) return;
-  const c = (p.cands||[])[selCand] || {};
+  const sorted = p._sorted || (p.cands||[]).map((c,i)=>({...c,origIdx:i}));
+  const c = sorted[selCand] || {};
   midPrice.textContent = fmt(c.p || p.price);
   midTitle.textContent = (c.title || p.title).slice(0,60);
   midCount.textContent = (selPin+1) + '/' + displayPins.length;
@@ -220,7 +225,8 @@ lw.addEventListener('scroll', debounce(() => {
 
 rw.addEventListener('scroll', debounce(() => {
   const p = displayPins[selPin]; if (!p) return;
-  const ci = Math.min((p.cands||[]).length-1, Math.max(0, Math.round(rw.scrollTop/ITEM_H)));
+  const sorted = p._sorted || (p.cands||[]);
+  const ci = Math.min(sorted.length-1, Math.max(0, Math.round(rw.scrollTop/ITEM_H)));
   if (ci !== selCand) {
     selCand = ci;
     rw.querySelectorAll('.wheel-item').forEach((el,ei) => el.classList.toggle('selected',ei===ci));
@@ -230,10 +236,11 @@ rw.addEventListener('scroll', debounce(() => {
 
 useBtn.addEventListener('click', () => {
   const p = displayPins[selPin]; if (!p) return;
-  const c = (p.cands||[])[selCand] || {};
+  const sorted = p._sorted || (p.cands||[]).map((c,i)=>({...c,origIdx:i}));
+  const c = sorted[selCand] || {};
   const price = c.p || p.price;
   _fbWrite(p.pk, {
-    selected_candidate_idx: selCand,
+    selected_candidate_idx: c.origIdx != null ? c.origIdx : selCand,
     display_price: price,
     priced_at: new Date().toISOString(),
     match_status: 'priced',

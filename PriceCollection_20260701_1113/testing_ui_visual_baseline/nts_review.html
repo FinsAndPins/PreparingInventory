@@ -53,6 +53,8 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
 .wi-slot{position:absolute;top:3px;left:3px;background:rgba(0,0,0,.7);
   color:#888;font-size:9px;padding:1px 3px;border-radius:2px}
 .wi-auto{background:rgba(160,100,0,.9);color:#fff}
+.wi-chosen{position:absolute;bottom:3px;left:3px;background:#1e4fa0;
+  color:#fff;font-size:9px;padding:1px 4px;border-radius:2px;font-weight:700}
 .wi-check{position:absolute;bottom:3px;right:3px;color:#6eff6e;
   font-size:16px;display:none}
 .wheel-item.confirmed .wi-check{display:block}
@@ -88,14 +90,14 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
 
 <div id="wheels">
   <div id="left-col">
-    <div class="col-label">PIN (slot0 price)</div>
+    <div class="col-label">PIN (chosen price / savings)</div>
     <div class="wheel" id="left-wheel"></div>
   </div>
   <div id="mid-col">
     <div id="pin-idx"></div>
     <div id="delta-box">
       <div id="delta-val">―</div>
-      <div id="delta-lbl">vs slot 0</div>
+      <div id="delta-lbl">vs chosen</div>
     </div>
   </div>
   <div id="right-col">
@@ -158,11 +160,17 @@ PINS.forEach((p, i) => {
 function buildRightWheel(pi) {
   rw.innerHTML = '';
   const p = PINS[pi]; if (!p) return;
-  const confCand = confirmed[p.pk];
-  (p.cands || []).forEach((c, ci) => {
+  // Sort candidates cheapest→most-expensive; track original slot index
+  const sorted = (p.cands || []).map((c, origIdx) => ({...c, origIdx}))
+    .sort((a, b) => (a.p || 0) - (b.p || 0));
+  p._sorted = sorted;
+  const confOrigIdx = confirmed[p.pk];
+  sorted.forEach((c, si) => {
+    const isChosen = c.origIdx === 0;  // slot 0 = what script priced at
+    const isConf   = confOrigIdx === c.origIdx;
     const el = document.createElement('div');
-    el.className = 'wheel-item' + (ci===0?' selected':'') + (confCand===ci?' confirmed':'');
-    el.dataset.ci = ci;
+    el.className = 'wheel-item' + (si===0?' selected':'') + (isConf?' confirmed':'');
+    el.dataset.si = si;
     const img = document.createElement('img');
     img.src = c.thumb || '';
     img.loading = 'lazy';
@@ -170,29 +178,49 @@ function buildRightWheel(pi) {
     const prEl = document.createElement('div');
     prEl.className = 'wi-price'; prEl.textContent = fmt(c.p);
     const slEl = document.createElement('div');
-    slEl.className = 'wi-slot'; slEl.textContent = 'S' + ci;
-    const chk = document.createElement('div');
-    chk.className = 'wi-check'; chk.textContent = '✓';
-    el.append(img, prEl, slEl, chk);
-    el.addEventListener('click', () => rw.scrollTo({top: ci*ITEM_H, behavior:'smooth'}));
+    slEl.className = 'wi-slot'; slEl.textContent = 'S' + c.origIdx;
+    el.append(img, prEl, slEl);
+    if (isChosen) {
+      const badge = document.createElement('div');
+      badge.className = 'wi-chosen'; badge.textContent = 'CHOSEN';
+      el.appendChild(badge);
+    }
+    if (isConf) {
+      const chk = document.createElement('div');
+      chk.className = 'wi-check'; chk.textContent = '✓';
+      el.appendChild(chk);
+    }
+    el.addEventListener('click', () => rw.scrollTo({top: si*ITEM_H, behavior:'smooth'}));
     rw.appendChild(el);
   });
-  rw.scrollTop = 0; selCand = 0; updateDelta();
+  // Start at cheapest (index 0 of sorted list)
+  selCand = 0; rw.scrollTop = 0;
+  updateDelta();
 }
 
 function updateDelta() {
   const p = PINS[selPin]; if (!p) return;
-  const c = p.cands[selCand] || p.cands[0]; if (!c) return;
-  const diff = c.p - p.slot0_p;
-  deltaVal.textContent = (diff >= 0 ? '+' : '') + fmt(Math.abs(diff));
-  deltaVal.style.color = diff > 0.5 ? '#ff6e6e' : diff < -0.5 ? '#6eff6e' : '#fff';
+  const sorted = p._sorted || (p.cands||[]).map((c,i)=>({...c,origIdx:i}));
+  const c = sorted[selCand] || sorted[0]; if (!c) return;
+  // savings = how much cheaper this listing is vs the chosen (slot 0) price
+  const savings = p.slot0_p - c.p;
+  if (Math.abs(savings) < 0.5) {
+    deltaVal.textContent = '$0'; deltaVal.style.color = '#fff';
+  } else if (savings > 0) {
+    deltaVal.textContent = '−$' + Math.round(savings); deltaVal.style.color = '#6eff6e';
+  } else {
+    deltaVal.textContent = '+$' + Math.round(-savings); deltaVal.style.color = '#ff6e6e';
+  }
   pinLabel.textContent = p.title.slice(0,50) || p.pk;
   pinIdx.textContent   = (selPin+1) + '/' + PINS.length;
-  const isSlot0 = selCand === 0;
-  confirmBtn.textContent = isSlot0
-    ? 'Keep Slot 0 (' + fmt(p.slot0_p) + ')'
-    : 'Use Slot ' + selCand + ' (' + fmt(c.p) + ')';
-  confirmBtn.style.background = isSlot0 ? '#2a2a6b' : '#1a5e1a';
+  const isChosen = c.origIdx === 0;
+  if (isChosen) {
+    confirmBtn.textContent = 'Keep Chosen (' + fmt(p.slot0_p) + ')';
+    confirmBtn.style.background = '#2a2a6b';
+  } else {
+    confirmBtn.textContent = 'Use S' + c.origIdx + ' (' + fmt(c.p) + ') — saves $' + Math.round(savings);
+    confirmBtn.style.background = '#1a5e1a';
+  }
 }
 
 function debounce(fn, ms) { let t; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; }
@@ -209,7 +237,8 @@ lw.addEventListener('scroll', debounce(() => {
 
 rw.addEventListener('scroll', debounce(() => {
   const p = PINS[selPin]; if (!p) return;
-  const ci = Math.min((p.cands||[]).length-1, Math.max(0, Math.round(rw.scrollTop/ITEM_H)));
+  const sorted = p._sorted || (p.cands||[]);
+  const ci = Math.min(sorted.length-1, Math.max(0, Math.round(rw.scrollTop/ITEM_H)));
   if (ci !== selCand) {
     selCand = ci;
     rw.querySelectorAll('.wheel-item').forEach((el,ei) => el.classList.toggle('selected',ei===ci));
@@ -219,11 +248,14 @@ rw.addEventListener('scroll', debounce(() => {
 
 confirmBtn.addEventListener('click', () => {
   const p = PINS[selPin]; if (!p) return;
+  const sorted = p._sorted || (p.cands||[]).map((c,i)=>({...c,origIdx:i}));
+  const c = sorted[selCand];
+  const origIdx = c ? c.origIdx : 0;
   const prevCand = confirmed[p.pk];
-  confirmed[p.pk] = selCand;
+  confirmed[p.pk] = origIdx;
   lw.querySelectorAll('.wheel-item')[selPin]?.classList.add('confirmed');
   rw.querySelectorAll('.wheel-item').forEach((el,ei) => el.classList.toggle('confirmed', ei===selCand));
-  _fbWrite(p.pk, { selected_candidate_idx: selCand, slot_reviewed_at: new Date().toISOString() });
+  _fbWrite(p.pk, { selected_candidate_idx: origIdx, slot_reviewed_at: new Date().toISOString() });
   undoLnk.style.display = 'inline';
   lastUndo = { pk: p.pk, pinI: selPin, prevCand };
   updateDelta();

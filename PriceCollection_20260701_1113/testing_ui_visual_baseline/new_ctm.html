@@ -32,12 +32,12 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
 #done-banner a{color:#4a9eff;font-size:15px}
 #photos{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative;
   min-height:0}
-#crop-wrap{flex:1;background:#1a1a1a;display:flex;align-items:center;
+#crop-wrap{flex:3;background:#1a1a1a;display:flex;align-items:center;
   justify-content:center;border-bottom:2px solid #333;overflow:hidden;position:relative}
 #crop-img{max-width:100%;max-height:100%;object-fit:contain}
 #crop-label{position:absolute;top:8px;left:8px;font-size:11px;color:#888;
   background:rgba(0,0,0,.6);padding:2px 6px;border-radius:4px}
-#thumb-wrap{flex:1;background:#0e1a0e;display:flex;align-items:center;
+#thumb-wrap{flex:2;background:#0e1a0e;display:flex;align-items:center;
   justify-content:center;overflow:hidden;position:relative}
 #thumb-img{max-width:100%;max-height:100%;object-fit:contain}
 #price-badge{position:absolute;bottom:8px;left:8px;font-size:14px;font-weight:700;
@@ -51,10 +51,10 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
 .sh-r{color:#6eff6e;font-size:32px;font-weight:900}
 /* Button rail */
 #btn-rail{position:absolute;right:0;top:0;bottom:0;
-  width:72px;display:flex;flex-direction:column;z-index:50}
-.rail-btn{flex:1;border:none;font-size:13px;font-weight:700;cursor:pointer;
+  width:56px;display:flex;flex-direction:column;z-index:50}
+.rail-btn{flex:1;border:none;font-size:12px;font-weight:700;cursor:pointer;
   display:flex;align-items:center;justify-content:center;text-align:center;
-  line-height:1.2;padding:0 4px}
+  line-height:1.2;padding:0 2px}
 #btn-match{background:#1a6b1a;color:#6eff6e}
 #btn-nomatch{background:#6b1a1a;color:#ff6e6e}
 #btn-back{background:#1a1a3a;color:#8888ff}
@@ -121,7 +121,7 @@ const FB_CFG   = {"apiKey": "AIzaSyB5HoTCon9uIFJqnF506tB_jORAG1HvI7o", "authDoma
 const TEST_RUN_ID = "test_PriceCollection_20260701_1113__build_5228_visual_baseline";
 const APPROACH_ID = "visual_baseline";
 const RUN_NAME    = "PriceCollection_20260701_1113";
-const SKIP_MS  = ["auto_match", "no_match", "match"];
+const SKIP_MS  = ["match", "auto_match", "no_match"];
 
 const STORE_KEY = 'ctm_idx_' + RUN_NAME;
 const queue = PINS.filter(p => !SKIP_MS.includes(p.ms));
@@ -253,4 +253,30 @@ function _fbWrite(pk, fields) {
   return window._db.doc(_fbPath(pk)).set(fields, {merge:true});
 }
 </script>
+<script>
+// Hydrate from Firestore: remove already-reviewed pins from queue
+(async function hydrateFromFirestore() {
+  if (!window._db) return;
+  try {
+    const snap = await window._db
+      .collection('pin_pricing_tests/' + TEST_RUN_ID + '/' + APPROACH_ID + '/pins')
+      .get();
+    let removed = 0;
+    snap.forEach(doc => {
+      const ms = (doc.data() || {}).match_status;
+      if (ms && SKIP_MS.includes(ms)) {
+        const qi = queue.findIndex(p => p.pk === doc.id);
+        if (qi !== -1) { queue.splice(qi, 1); removed++; }
+      }
+    });
+    if (removed > 0) {
+      console.log('CTM hydrated: removed ' + removed + ' already-reviewed pins');
+      idx = 0; history = [];
+      sessionStorage.setItem(STORE_KEY, 0);
+      showPin(0);
+    }
+  } catch(e) { console.warn('CTM Firebase hydration failed', e); }
+})();
+</script>
+
 </body></html>
