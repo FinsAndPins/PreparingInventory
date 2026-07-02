@@ -190,7 +190,12 @@ function buildRightWheel(pi) {
       chk.className = 'wi-check'; chk.textContent = '✓';
       el.appendChild(chk);
     }
-    el.addEventListener('click', () => rw.scrollTo({top: si*ITEM_H, behavior:'smooth'}));
+    el.addEventListener('click', () => {
+      selCand = si;
+      rw.querySelectorAll('.wheel-item').forEach((el,ei) => el.classList.toggle('selected', ei===si));
+      rw.scrollTo({top: si*ITEM_H, behavior:'smooth'});
+      updateDelta();
+    });
     rw.appendChild(el);
   });
   // Start at cheapest (index 0 of sorted list)
