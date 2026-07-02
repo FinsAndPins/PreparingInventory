@@ -36,6 +36,7 @@ a.back-btn{color:#4a9eff;font-size:14px;text-decoration:none;padding:4px 0}
   overflow:hidden;aspect-ratio:1;border:2px solid transparent}
 .card.ms-match{border-color:#2a7a2a}
 .card.ms-no_match{border-color:#7a2a2a}
+.card.ms-priced{border-color:#1a4a7a}
 .card.ms-unreviewed{border-color:#333}
 .card img{width:100%;height:100%;object-fit:contain;background:#222}
 .price{position:absolute;top:3px;right:3px;background:rgba(0,0,0,.8);
@@ -148,7 +149,8 @@ function _fbPath(pk) {
 function _getUser() {
   let u = localStorage.getItem("fpins_reviewer");
   if (!u) {
-    u = (window.prompt("Your name (saved for pricing records):") || "").trim().slice(0, 30);
+    try { u = (window.prompt("Your name (saved for pricing records):") || "").trim().slice(0, 30); }
+    catch(e) { u = ""; }
     if (u) localStorage.setItem("fpins_reviewer", u);
     else u = "unknown";
   }
@@ -161,7 +163,7 @@ function _fbWrite(pk, fields) {
 }
 </script>
 <script>
-// Hydrate prices from Firestore so contact sheet shows current display_price
+// Hydrate prices + match status from Firestore so contact sheet shows current data
 (async function hydrateContactSheet() {
   if (!window._db) return;
   try {
@@ -169,10 +171,11 @@ function _fbWrite(pk, fields) {
       .collection('pin_pricing_tests/' + TEST_RUN_ID + '/' + APPROACH_ID + '/pins')
       .get();
     if (snap.empty) return;
-    const priceMap = {};
+    const priceMap = {}, msMap = {};
     snap.forEach(doc => {
       const d = doc.data() || {};
       if (d.display_price != null) priceMap[doc.id] = d.display_price;
+      if (d.match_status)          msMap[doc.id]    = d.match_status;
     });
     let updated = 0;
     document.querySelectorAll('.card[data-pk]').forEach(card => {
@@ -186,8 +189,17 @@ function _fbWrite(pk, fields) {
         }
         updated++;
       }
+      if (msMap[pk]) {
+        const ms = msMap[pk];
+        let cls;
+        if (ms === 'no_match')                      cls = 'ms-no_match';
+        else if (ms === 'priced')                    cls = 'ms-priced';
+        else if (['match','auto_match'].includes(ms))cls = 'ms-match';
+        else                                         cls = 'ms-unreviewed';
+        card.className = card.className.replace(/ms-\S+/, cls);
+      }
     });
-    console.log('Contact sheet: hydrated ' + updated + ' prices from Firebase');
+    console.log('Contact sheet: hydrated ' + updated + ' pins from Firebase');
   } catch(e) { console.warn('Contact sheet hydration failed', e); }
 })();
 </script>

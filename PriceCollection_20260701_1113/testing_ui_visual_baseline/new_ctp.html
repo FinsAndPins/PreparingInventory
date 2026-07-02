@@ -190,10 +190,15 @@ function buildRightWheel(pi) {
   const sorted = (p.cands || []).map((c, origIdx) => ({...c, origIdx}))
     .sort((a, b) => (a.p || 0) - (b.p || 0));
   p._sorted = sorted;
+  // Pre-select Firebase-confirmed slot if available, else slot 0 (auto suggestion)
+  const usedOrigIdx = p._fbCandIdx != null ? p._fbCandIdx : null;
+  const targetOrigIdx = usedOrigIdx != null ? usedOrigIdx : 0;
+  const initSi = Math.max(0, sorted.findIndex(c => c.origIdx === targetOrigIdx));
   sorted.forEach((c, si) => {
-    const isChosen = c.origIdx === 0;
+    const isUsed = usedOrigIdx != null && c.origIdx === usedOrigIdx;
+    const isAuto = c.origIdx === 0;
     const el = document.createElement('div');
-    el.className = 'wheel-item' + (si === 0 ? ' selected' : '');
+    el.className = 'wheel-item' + (si === initSi ? ' selected' : '');
     const img = document.createElement('img');
     img.src = c.thumb || '';
     img.loading = 'lazy';
@@ -203,9 +208,15 @@ function buildRightWheel(pi) {
     const sl = document.createElement('div');
     sl.className = 'wi-slot'; sl.textContent = 'S' + c.origIdx;
     el.append(img, pr, sl);
-    if (isChosen) {
+    if (isUsed) {
       const badge = document.createElement('div');
-      badge.className = 'wi-chosen'; badge.textContent = 'CHOSEN';
+      badge.className = 'wi-chosen'; badge.textContent = '✓ USED';
+      badge.style.background = '#1a6b1a';
+      el.appendChild(badge);
+    } else if (isAuto) {
+      const badge = document.createElement('div');
+      badge.className = 'wi-chosen'; badge.textContent = 'AUTO';
+      badge.style.background = '#444';
       el.appendChild(badge);
     }
     el.addEventListener('click', () => {
@@ -216,7 +227,7 @@ function buildRightWheel(pi) {
     });
     rw.appendChild(el);
   });
-  rw.scrollTop = 0; selCand = 0; updateMid();
+  rw.scrollTop = initSi * ITEM_H; selCand = initSi; updateMid();
 }
 
 function updateMid() {
@@ -355,7 +366,8 @@ function _fbPath(pk) {
 function _getUser() {
   let u = localStorage.getItem("fpins_reviewer");
   if (!u) {
-    u = (window.prompt("Your name (saved for pricing records):") || "").trim().slice(0, 30);
+    try { u = (window.prompt("Your name (saved for pricing records):") || "").trim().slice(0, 30); }
+    catch(e) { u = ""; }
     if (u) localStorage.setItem("fpins_reviewer", u);
     else u = "unknown";
   }
@@ -367,4 +379,45 @@ function _fbWrite(pk, fields) {
     Object.assign({}, fields, {reviewed_by: _getUser()}), {merge:true});
 }
 </script>
+<script>
+// Hydrate CTP v2 from Firestore: update prices, match statuses, and confirmed slots
+(async function hydrateCTP() {
+  if (!window._db) return;
+  try {
+    const fbPath = 'pin_pricing_tests/' + TEST_RUN_ID + '/' + APPROACH_ID + '/pins';
+    const snap = await window._db.collection(fbPath).get();
+    if (snap.empty) return;
+    let updated = 0;
+    snap.forEach(doc => {
+      const d = doc.data() || {};
+      const pk = doc.id;
+      const pi = PINS.findIndex(p => p.pk === pk);
+      if (pi === -1) return;
+      if (d.display_price != null) { PINS[pi].price = d.display_price; updated++; }
+      if (d.match_status)           PINS[pi].ms = d.match_status;
+      if (d.selected_candidate_idx != null) PINS[pi]._fbCandIdx = d.selected_candidate_idx;
+    });
+    if (updated === 0) return;
+    console.log('CTP: hydrated ' + updated + ' pins from Firebase');
+    // Re-render with updated prices/statuses
+    const urlPk = new URLSearchParams(window.location.search).get('pin');
+    applyFilterSort();
+    // Re-run ?pin= navigation if present (buildLeftWheel resets scroll)
+    if (urlPk) {
+      const i = displayPins.findIndex(p => p.pk === urlPk);
+      if (i >= 0) {
+        requestAnimationFrame(() => {
+          lw.scrollTop = i * ITEM_H;
+          selPin = i;
+          lw.querySelectorAll('.wheel-item').forEach((el,ei) => el.classList.toggle('selected', ei===i));
+          buildRightWheel(i);
+          const p = displayPins[i];
+          if (p) document.getElementById('ebay-q').value = p.title.slice(0,60);
+        });
+      }
+    }
+  } catch(e) { console.warn('CTP Firebase hydration failed', e); }
+})();
+</script>
+
 </body></html>
