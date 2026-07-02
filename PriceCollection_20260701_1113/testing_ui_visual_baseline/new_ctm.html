@@ -23,39 +23,40 @@ a.back-btn{color:#4a9eff;font-size:14px;text-decoration:none;padding:4px 0}
 #nav-menu a.current{color:#4a9eff;font-weight:600}
 #nav-menu a:active{background:#333}
 
-body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+body{height:100dvh;display:flex;flex-direction:column;overflow:hidden;
+  padding-bottom:env(safe-area-inset-bottom,0px)}
 #progress{font-size:12px;color:#888}
 #done-banner{display:none;position:fixed;inset:0;background:#111;z-index:200;
   flex-direction:column;align-items:center;justify-content:center;
   font-size:20px;font-weight:700;gap:16px}
 #done-banner.show{display:flex}
 #done-banner a{color:#4a9eff;font-size:15px}
-#photos{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative;
-  min-height:0;padding-bottom:env(safe-area-inset-bottom,0px)}
-#crop-wrap{flex:4;background:#1a1a1a;display:flex;align-items:center;
+/* photos + rail sit side-by-side in #content */
+#content{flex:1;display:flex;overflow:hidden;min-height:0}
+#photos{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
+#crop-wrap{flex:1;background:#1a1a1a;display:flex;align-items:center;
   justify-content:center;border-bottom:2px solid #333;overflow:hidden;position:relative}
-#crop-img{width:calc(100% - 60px);max-height:100%;object-fit:contain}
+#crop-img{width:100%;max-height:100%;object-fit:contain}
 #crop-label{position:absolute;top:8px;left:8px;font-size:11px;color:#888;
   background:rgba(0,0,0,.6);padding:2px 6px;border-radius:4px}
-#thumb-wrap{flex:2;background:#0e1a0e;display:flex;align-items:center;
+#thumb-wrap{flex:1;background:#0e1a0e;display:flex;align-items:center;
   justify-content:center;overflow:hidden;position:relative}
-#thumb-img{width:calc(100% - 60px);max-height:100%;object-fit:contain}
+#thumb-img{width:100%;max-height:100%;object-fit:contain}
 #price-badge{position:absolute;bottom:8px;left:8px;font-size:14px;font-weight:700;
   color:#fff;background:rgba(0,0,0,.75);padding:3px 8px;border-radius:5px}
-/* Swipe hint overlay */
+/* Swipe hint overlay (inside crop-wrap which is position:relative) */
 #swipe-hint{position:absolute;inset:0;display:flex;pointer-events:none;
   align-items:center;justify-content:space-between;padding:0 20px;opacity:0;
   transition:opacity .15s}
 #swipe-hint.show{opacity:1}
 .sh-l{color:#ff6e6e;font-size:32px;font-weight:900}
 .sh-r{color:#6eff6e;font-size:32px;font-weight:900}
-/* Button rail */
-#btn-rail{position:absolute;right:0;top:0;bottom:0;
-  width:56px;display:flex;flex-direction:column;z-index:50;
-  padding-bottom:env(safe-area-inset-bottom,0px)}
+/* Button rail — sibling of #photos, NOT inside it */
+#btn-rail{width:56px;display:flex;flex-direction:column}
 .rail-btn{flex:1;border:none;font-size:12px;font-weight:700;cursor:pointer;
   display:flex;align-items:center;justify-content:center;text-align:center;
-  line-height:1.2;padding:0 2px}
+  line-height:1.2;padding:0 2px;-webkit-tap-highlight-color:transparent;
+  touch-action:manipulation}
 #btn-match{background:#1a6b1a;color:#6eff6e}
 #btn-nomatch{background:#6b1a1a;color:#ff6e6e}
 #btn-notpin{background:#5a3a00;color:#ffb84d}
@@ -88,24 +89,26 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
   <a href="new_ctm.html" class="current">ClickToMatch v2</a>
 </div>
 
-<div id="photos">
-  <div id="crop-wrap">
-    <img id="crop-img" alt="Pin crop">
-    <div id="crop-label">Our Pin</div>
-    <div id="swipe-hint"><span class="sh-l">✗</span><span class="sh-r">✓</span></div>
+<div id="content">
+  <div id="photos">
+    <div id="crop-wrap">
+      <img id="crop-img" alt="Pin crop">
+      <div id="crop-label">Our Pin</div>
+      <div id="swipe-hint"><span class="sh-l">✗</span><span class="sh-r">✓</span></div>
+    </div>
+    <div id="thumb-wrap">
+      <img id="thumb-img" alt="eBay listing">
+      <div id="price-badge"></div>
+    </div>
   </div>
-  <div id="thumb-wrap">
-    <img id="thumb-img" alt="eBay listing">
-    <div id="price-badge"></div>
-  </div>
-</div>
 
-<div id="btn-rail">
-  <button class="rail-btn" id="btn-notpin">Not a Pin</button>
-  <button class="rail-btn" id="btn-skip">Skip</button>
-  <button class="rail-btn" id="btn-back">Back</button>
-  <button class="rail-btn" id="btn-nomatch">No Match</button>
-  <button class="rail-btn" id="btn-match">Match ✓</button>
+  <div id="btn-rail">
+    <button class="rail-btn" id="btn-notpin">Not a Pin</button>
+    <button class="rail-btn" id="btn-skip">Skip</button>
+    <button class="rail-btn" id="btn-back">Back</button>
+    <button class="rail-btn" id="btn-nomatch">No Match</button>
+    <button class="rail-btn" id="btn-match">Match ✓</button>
+  </div>
 </div>
 
 <div id="undo-toast">
@@ -124,7 +127,7 @@ const FB_CFG   = {"apiKey": "AIzaSyB5HoTCon9uIFJqnF506tB_jORAG1HvI7o", "authDoma
 const TEST_RUN_ID = "test_PriceCollection_20260701_1113__build_5228_visual_baseline";
 const APPROACH_ID = "visual_baseline";
 const RUN_NAME    = "PriceCollection_20260701_1113";
-const SKIP_MS  = ["no_match", "match", "not_a_pin", "auto_match"];
+const SKIP_MS  = ["match", "auto_match", "no_match", "not_a_pin"];
 
 const STORE_KEY = 'ctm_idx_' + RUN_NAME;
 const queue = PINS.filter(p => !SKIP_MS.includes(p.ms));
