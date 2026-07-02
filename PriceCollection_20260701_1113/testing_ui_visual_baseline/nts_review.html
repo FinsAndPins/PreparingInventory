@@ -323,7 +323,8 @@ function _fbPath(pk) {
 function _getUser() {
   let u = localStorage.getItem("fpins_reviewer");
   if (!u) {
-    u = (window.prompt("Your name (saved for pricing records):") || "").trim().slice(0, 30);
+    try { u = (window.prompt("Your name (saved for pricing records):") || "").trim().slice(0, 30); }
+    catch(e) { u = ""; }
     if (u) localStorage.setItem("fpins_reviewer", u);
     else u = "unknown";
   }
