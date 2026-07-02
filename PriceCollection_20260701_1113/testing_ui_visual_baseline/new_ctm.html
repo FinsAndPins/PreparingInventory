@@ -31,8 +31,7 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden;
   font-size:20px;font-weight:700;gap:16px}
 #done-banner.show{display:flex}
 #done-banner a{color:#4a9eff;font-size:15px}
-/* photos + rail sit side-by-side in #content */
-#content{flex:1;display:flex;overflow:hidden;min-height:0}
+/* Photos fill remaining space above button zone */
 #photos{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
 #crop-wrap{flex:1;background:#1a1a1a;display:flex;align-items:center;
   justify-content:center;border-bottom:2px solid #333;overflow:hidden;position:relative}
@@ -44,32 +43,28 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden;
 #thumb-img{width:100%;max-height:100%;object-fit:contain}
 #price-badge{position:absolute;bottom:8px;left:8px;font-size:14px;font-weight:700;
   color:#fff;background:rgba(0,0,0,.75);padding:3px 8px;border-radius:5px}
-/* Swipe hint overlay (inside crop-wrap which is position:relative) */
+/* Swipe hint overlay */
 #swipe-hint{position:absolute;inset:0;display:flex;pointer-events:none;
   align-items:center;justify-content:space-between;padding:0 20px;opacity:0;
   transition:opacity .15s}
 #swipe-hint.show{opacity:1}
 .sh-l{color:#ff6e6e;font-size:32px;font-weight:900}
 .sh-r{color:#6eff6e;font-size:32px;font-weight:900}
-/* Button rail — sibling of #photos, NOT inside it */
-#btn-rail{width:80px;display:flex;flex-direction:column}
+/* Button zone — below photos, 3-column layout:
+   left col:   Skip (top) / No Match (bottom)   ← left thumb
+   center:     Not a Pin (full height)           ← either thumb
+   right col:  Back (top) / Match (bottom)       ← right thumb  */
+#btn-area{display:flex;height:120px;flex-shrink:0}
+#btn-col-left,#btn-col-right{flex:1;display:flex;flex-direction:column}
 .rail-btn{flex:1;border:none;font-size:14px;font-weight:700;cursor:pointer;
   display:flex;align-items:center;justify-content:center;text-align:center;
-  line-height:1.2;padding:0 4px;-webkit-tap-highlight-color:transparent;
+  line-height:1.2;padding:0 6px;-webkit-tap-highlight-color:transparent;
   touch-action:manipulation}
-#btn-match{background:#1a6b1a;color:#6eff6e}
+#btn-match  {background:#1a6b1a;color:#6eff6e}
 #btn-nomatch{background:#6b1a1a;color:#ff6e6e}
-#btn-notpin{background:#5a3a00;color:#ffb84d}
-#btn-back{background:#1a1a3a;color:#8888ff}
-#btn-skip{background:#2a2a2a;color:#aaa}
-/* Undo toast */
-#undo-toast{display:none;position:fixed;bottom:80px;left:50%;
-  transform:translateX(-50%);background:#333;color:#fff;border-radius:20px;
-  padding:8px 16px;font-size:14px;z-index:300;gap:12px;align-items:center;
-  white-space:nowrap}
-#undo-toast.show{display:flex}
-#undo-btn-t{background:none;border:1px solid #888;color:#fff;padding:4px 10px;
-  border-radius:10px;font-size:13px;cursor:pointer}
+#btn-notpin {background:#5a3a00;color:#ffb84d;width:80px;flex-shrink:0}
+#btn-back   {background:#1a1a3a;color:#8888ff}
+#btn-skip   {background:#2a2a2a;color:#aaa}
 </style>
 </head><body>
 <div id="hdr">
@@ -89,31 +84,28 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden;
   <a href="new_ctm.html" class="current">ClickToMatch v2</a>
 </div>
 
-<div id="content">
-  <div id="photos">
-    <div id="crop-wrap">
-      <img id="crop-img" alt="Pin crop">
-      <div id="crop-label">Our Pin</div>
-      <div id="swipe-hint"><span class="sh-l">✗</span><span class="sh-r">✓</span></div>
-    </div>
-    <div id="thumb-wrap">
-      <img id="thumb-img" alt="eBay listing">
-      <div id="price-badge"></div>
-    </div>
+<div id="photos">
+  <div id="crop-wrap">
+    <img id="crop-img" alt="Pin crop">
+    <div id="crop-label">Our Pin</div>
+    <div id="swipe-hint"><span class="sh-l">✗</span><span class="sh-r">✓</span></div>
   </div>
-
-  <div id="btn-rail">
-    <button class="rail-btn" id="btn-notpin">Not a Pin</button>
-    <button class="rail-btn" id="btn-skip">Skip</button>
-    <button class="rail-btn" id="btn-back">Back</button>
-    <button class="rail-btn" id="btn-nomatch">No Match</button>
-    <button class="rail-btn" id="btn-match">Match ✓</button>
+  <div id="thumb-wrap">
+    <img id="thumb-img" alt="eBay listing">
+    <div id="price-badge"></div>
   </div>
 </div>
 
-<div id="undo-toast">
-  <span id="undo-msg"></span>
-  <button id="undo-btn-t">Undo</button>
+<div id="btn-area">
+  <div id="btn-col-left">
+    <button class="rail-btn" id="btn-skip">Skip</button>
+    <button class="rail-btn" id="btn-nomatch">No Match</button>
+  </div>
+  <button class="rail-btn" id="btn-notpin">Not a<br>Pin</button>
+  <div id="btn-col-right">
+    <button class="rail-btn" id="btn-back">Back</button>
+    <button class="rail-btn" id="btn-match">Match ✓</button>
+  </div>
 </div>
 
 <div id="done-banner">
@@ -127,14 +119,13 @@ const FB_CFG   = {"apiKey": "AIzaSyB5HoTCon9uIFJqnF506tB_jORAG1HvI7o", "authDoma
 const TEST_RUN_ID = "test_PriceCollection_20260701_1113__build_5228_visual_baseline";
 const APPROACH_ID = "visual_baseline";
 const RUN_NAME    = "PriceCollection_20260701_1113";
-const SKIP_MS  = ["not_a_pin", "match", "no_match", "auto_match"];
+const SKIP_MS  = ["auto_match", "not_a_pin", "no_match", "match"];
 
 const STORE_KEY = 'ctm_idx_' + RUN_NAME;
 const queue = PINS.filter(p => !SKIP_MS.includes(p.ms));
 let idx = parseInt(sessionStorage.getItem(STORE_KEY) || '0', 10);
 if (idx >= queue.length) idx = 0;
 let history = [];
-let undoTimer = null;
 
 const cropEl   = document.getElementById('crop-img');
 const thumbEl  = document.getElementById('thumb-img');
@@ -159,32 +150,12 @@ function record(pk, status) {
   return _fbWrite(pk, { match_status: status, matched_at: new Date().toISOString() });
 }
 
-function hideUndo() {
-  clearTimeout(undoTimer);
-  document.getElementById('undo-toast').classList.remove('show');
-}
-
-function showUndo(msg, onUndo) {
-  hideUndo();
-  document.getElementById('undo-msg').textContent = msg;
-  document.getElementById('undo-toast').classList.add('show');
-  document.getElementById('undo-btn-t').onclick = () => { hideUndo(); onUndo(); };
-  undoTimer = setTimeout(hideUndo, 4000);
-}
-
 function doAction(status) {
   if (idx >= queue.length) return;
   const p = queue[idx];
   history.push(idx);
-  const prev = idx;
   idx++;
   showPin(idx);
-  const label = status === 'match' ? 'Marked Match' : 'Marked No Match';
-  showUndo(label, () => {
-    try { record(p.pk, 'unreviewed'); } catch(e) { console.warn('undo write failed', e); }
-    idx = prev;
-    showPin(idx);
-  });
   try { record(p.pk, status); } catch(e) { console.warn('CTM write failed', e); }
 }
 
@@ -195,14 +166,8 @@ document.getElementById('btn-notpin').addEventListener('click', () => {
   if (idx >= queue.length) return;
   const p = queue[idx];
   history.push(idx);
-  const prev = idx;
   idx++;
   showPin(idx);
-  showUndo('Marked Not a Pin', () => {
-    try { _fbWrite(p.pk, { match_status: 'unreviewed', display_price: p.price || 0 }); } catch(e) {}
-    idx = prev;
-    showPin(idx);
-  });
   try {
     _fbWrite(p.pk, {
       match_status: 'not_a_pin',
@@ -221,8 +186,6 @@ document.getElementById('btn-back').addEventListener('click', () => {
   if (history.length === 0) return;
   idx = history.pop(); showPin(idx);
 });
-
-document.getElementById('undo-btn-t').addEventListener('click', hideUndo);
 
 // ── Swipe gestures ────────────────────────────────────────────────────────
 let touchX0 = null, touchY0 = null;
