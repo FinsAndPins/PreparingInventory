@@ -160,9 +160,15 @@ PINS.forEach((p, i) => {
 function buildRightWheel(pi) {
   rw.innerHTML = '';
   const p = PINS[pi]; if (!p) return;
-  // Sort candidates cheapest→most-expensive; track original slot index
-  const sorted = (p.cands || []).map((c, origIdx) => ({...c, origIdx}))
-    .sort((a, b) => (a.p || 0) - (b.p || 0));
+  // Sort: chosen (slot 0) first, then cheaper options descending, then pricier options ascending
+  const allCands = (p.cands || []).map((c, origIdx) => ({...c, origIdx}));
+  const chosen0  = allCands.find(c => c.origIdx === 0);
+  const chosenP  = chosen0 ? (chosen0.p || 0) : 0;
+  const cheaper  = allCands.filter(c => c.origIdx !== 0 && (c.p || 0) < chosenP)
+                           .sort((a, b) => (b.p || 0) - (a.p || 0)); // desc: closest-to-chosen first
+  const pricier  = allCands.filter(c => c.origIdx !== 0 && (c.p || 0) >= chosenP)
+                           .sort((a, b) => (a.p || 0) - (b.p || 0)); // asc: just above chosen first
+  const sorted   = [chosen0, ...cheaper, ...pricier].filter(Boolean);
   p._sorted = sorted;
   const confOrigIdx = confirmed[p.pk];
   sorted.forEach((c, si) => {
