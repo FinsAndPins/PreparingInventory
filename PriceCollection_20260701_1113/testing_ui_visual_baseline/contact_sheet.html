@@ -150,4 +150,36 @@ function _fbWrite(pk, fields) {
   return window._db.doc(_fbPath(pk)).set(fields, {merge:true});
 }
 </script>
+<script>
+// Hydrate prices from Firestore so contact sheet shows current display_price
+(async function hydrateContactSheet() {
+  if (!window._db) return;
+  try {
+    const snap = await window._db
+      .collection('pin_pricing_tests/' + TEST_RUN_ID + '/' + APPROACH_ID + '/pins')
+      .get();
+    if (snap.empty) return;
+    const priceMap = {};
+    snap.forEach(doc => {
+      const d = doc.data() || {};
+      if (d.display_price != null) priceMap[doc.id] = d.display_price;
+    });
+    let updated = 0;
+    document.querySelectorAll('.card[data-pk]').forEach(card => {
+      const pk = card.dataset.pk;
+      if (priceMap[pk] != null) {
+        const pr = card.querySelector('.price');
+        if (pr) {
+          const v = priceMap[pk];
+          pr.textContent = '$' + (v > 0 ? Math.round(v) : '0');
+          pr.style.background = v > 0 ? 'rgba(0,0,0,.8)' : 'rgba(100,0,0,.85)';
+        }
+        updated++;
+      }
+    });
+    console.log('Contact sheet: hydrated ' + updated + ' prices from Firebase');
+  } catch(e) { console.warn('Contact sheet hydration failed', e); }
+})();
+</script>
+
 </body></html>

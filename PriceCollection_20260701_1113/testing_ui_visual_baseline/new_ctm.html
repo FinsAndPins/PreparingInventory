@@ -57,6 +57,7 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
   line-height:1.2;padding:0 2px}
 #btn-match{background:#1a6b1a;color:#6eff6e}
 #btn-nomatch{background:#6b1a1a;color:#ff6e6e}
+#btn-notpin{background:#5a3a00;color:#ffb84d}
 #btn-back{background:#1a1a3a;color:#8888ff}
 #btn-skip{background:#2a2a2a;color:#aaa}
 /* Undo toast */
@@ -101,6 +102,7 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
 <div id="btn-rail">
   <button class="rail-btn" id="btn-skip">Skip</button>
   <button class="rail-btn" id="btn-back">Back</button>
+  <button class="rail-btn" id="btn-notpin">Not a Pin</button>
   <button class="rail-btn" id="btn-nomatch">No Match</button>
   <button class="rail-btn" id="btn-match">Match ✓</button>
 </div>
@@ -121,7 +123,7 @@ const FB_CFG   = {"apiKey": "AIzaSyB5HoTCon9uIFJqnF506tB_jORAG1HvI7o", "authDoma
 const TEST_RUN_ID = "test_PriceCollection_20260701_1113__build_5228_visual_baseline";
 const APPROACH_ID = "visual_baseline";
 const RUN_NAME    = "PriceCollection_20260701_1113";
-const SKIP_MS  = ["match", "auto_match", "no_match"];
+const SKIP_MS  = ["not_a_pin", "no_match", "auto_match", "match"];
 
 const STORE_KEY = 'ctm_idx_' + RUN_NAME;
 const queue = PINS.filter(p => !SKIP_MS.includes(p.ms));
@@ -184,6 +186,25 @@ function doAction(status) {
 
 document.getElementById('btn-match').addEventListener('click', () => doAction('match'));
 document.getElementById('btn-nomatch').addEventListener('click', () => doAction('no_match'));
+
+document.getElementById('btn-notpin').addEventListener('click', () => {
+  if (idx >= queue.length) return;
+  const p = queue[idx];
+  history.push(idx);
+  _fbWrite(p.pk, {
+    match_status: 'not_a_pin',
+    display_price: 0,
+    marked_not_a_pin_at: new Date().toISOString(),
+  });
+  const prev = idx;
+  idx++;
+  showPin(idx);
+  showUndo('Marked Not a Pin', () => {
+    _fbWrite(p.pk, { match_status: 'unreviewed', display_price: p.price || 0 });
+    idx = prev;
+    showPin(idx);
+  });
+});
 
 document.getElementById('btn-skip').addEventListener('click', () => {
   if (idx >= queue.length) return;

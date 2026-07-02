@@ -60,6 +60,59 @@ log_pipeline_stderr() {
   done < "$err_file"
 }
 
+# Remove abandoned .git/*.lock (Cursor/git crash → exit 128 on commit).
+clear_stale_git_lock_files() {
+  local git_dir="${PREP}/.git"
+  [[ -d "$git_dir" ]] || return 0
+  local min_age="${GIT_STALE_LOCK_MIN_AGE_SEC:-30}"
+  local now lock age
+  now=$(date +%s)
+  for lock in "${git_dir}/index.lock" "${git_dir}/HEAD.lock" "${git_dir}/refs/heads/main.lock"; do
+    [[ -f "$lock" ]] || continue
+    age=$(( now - $(stat -f %m "$lock" 2>/dev/null || echo "$now") ))
+    if (( age >= min_age )); then
+      log "WARN: removing stale git lock (${age}s old): $lock"
+      rm -f "$lock"
+    fi
+  done
+}
+
+clear_stale_git_lock_from_stderr() {
+  local err="$1"
+  local git_dir="${PREP}/.git"
+  [[ -d "$git_dir" ]] || return 0
+  if [[ "$err" == *"index.lock"* && -f "${git_dir}/index.lock" ]]; then
+    log "WARN: removing git index.lock after lock error"
+    rm -f "${git_dir}/index.lock"
+  fi
+  if [[ "$err" == *"HEAD.lock"* && -f "${git_dir}/HEAD.lock" ]]; then
+    log "WARN: removing git HEAD.lock after lock error"
+    rm -f "${git_dir}/HEAD.lock"
+  fi
+}
+
+# launchd + iCloud git often hits transient index.lock / "Operation not permitted" (exit 128).
+git_with_retry() {
+  local attempts="${GIT_RETRY_ATTEMPTS:-8}"
+  local delay="${GIT_RETRY_DELAY_SEC:-4}"
+  local n=1 rc=0 err=""
+  while (( n <= attempts )); do
+    clear_stale_git_lock_files
+    err=$("$@" 2>&1) && return 0
+    rc=$?
+    log "WARN: git failed (exit ${rc}, attempt ${n}/${attempts}): $*"
+    [[ -n "$err" ]] && log "WARN: git stderr: ${err}"
+    clear_stale_git_lock_from_stderr "$err"
+    if (( n < attempts )); then
+      sleep "$delay"
+    fi
+    n=$((n + 1))
+  done
+  log "ERROR: git failed after ${attempts} attempts (exit ${rc}): $*"
+  [[ -n "$err" ]] && log "ERROR: git stderr: ${err}"
+  return "$rc"
+}
+
 BOARD_MIN_BYTES="${BOARD_MIN_BYTES:-1024}"
 
 board_file_bytes_ok() {
@@ -392,9 +445,9 @@ else
   log "WARN: prune_github_retention.py missing or python3 unavailable — skipping retention prune"
 fi
 
-git add "$NEWNAME" BoardsToPrice
-for f in pricing_index.json index.html update_pricing_index.py; do
-  [[ -f "$f" ]] && git add "$f"
+git_with_retry git add "$NEWNAME" BoardsToPrice
+for f in pricing_index.json index.html update_pricing_index.py .gitignore; do
+  [[ -f "$f" ]] && git_with_retry git add "$f"
 done
 
 # Allow BoardsToPrice/, the new collection, retention-prune untracks (any PriceCollection_*), and
@@ -413,9 +466,14 @@ if git diff --cached --quiet; then
   exit 1
 fi
 
-git commit -m "Add pricing run ${NEWNAME} (boards from BoardsToPrice inbox)."
+git_with_retry git commit -m "Add pricing run ${NEWNAME} (boards from BoardsToPrice inbox)."
 log "Committed. Pushing origin main…"
-git push origin main
+git_with_retry git push origin main
 log "Done. Push complete."
+
+if [[ -n "${BOARD_INBOX_DIR:-}" ]]; then
+  log "Clearing canonical BoardsToPrice (${PREP}/BoardsToPrice) after successful push (mirror inbox — remove duplicate iCloud copies)."
+  clear_canonical_boards_to_price_drop_zone
+fi
 
 exit 0
