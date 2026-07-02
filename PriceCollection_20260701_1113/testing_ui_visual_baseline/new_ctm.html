@@ -52,10 +52,10 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden;
 .sh-l{color:#ff6e6e;font-size:32px;font-weight:900}
 .sh-r{color:#6eff6e;font-size:32px;font-weight:900}
 /* Button rail — sibling of #photos, NOT inside it */
-#btn-rail{width:56px;display:flex;flex-direction:column}
-.rail-btn{flex:1;border:none;font-size:12px;font-weight:700;cursor:pointer;
+#btn-rail{width:80px;display:flex;flex-direction:column}
+.rail-btn{flex:1;border:none;font-size:14px;font-weight:700;cursor:pointer;
   display:flex;align-items:center;justify-content:center;text-align:center;
-  line-height:1.2;padding:0 2px;-webkit-tap-highlight-color:transparent;
+  line-height:1.2;padding:0 4px;-webkit-tap-highlight-color:transparent;
   touch-action:manipulation}
 #btn-match{background:#1a6b1a;color:#6eff6e}
 #btn-nomatch{background:#6b1a1a;color:#ff6e6e}
@@ -127,7 +127,7 @@ const FB_CFG   = {"apiKey": "AIzaSyB5HoTCon9uIFJqnF506tB_jORAG1HvI7o", "authDoma
 const TEST_RUN_ID = "test_PriceCollection_20260701_1113__build_5228_visual_baseline";
 const APPROACH_ID = "visual_baseline";
 const RUN_NAME    = "PriceCollection_20260701_1113";
-const SKIP_MS  = ["match", "auto_match", "no_match", "not_a_pin"];
+const SKIP_MS  = ["match", "no_match", "auto_match", "not_a_pin"];
 
 const STORE_KEY = 'ctm_idx_' + RUN_NAME;
 const queue = PINS.filter(p => !SKIP_MS.includes(p.ms));
@@ -176,16 +176,16 @@ function doAction(status) {
   if (idx >= queue.length) return;
   const p = queue[idx];
   history.push(idx);
-  record(p.pk, status);
   const prev = idx;
   idx++;
   showPin(idx);
   const label = status === 'match' ? 'Marked Match' : 'Marked No Match';
   showUndo(label, () => {
-    record(p.pk, 'unreviewed');
+    try { record(p.pk, 'unreviewed'); } catch(e) { console.warn('undo write failed', e); }
     idx = prev;
     showPin(idx);
   });
+  try { record(p.pk, status); } catch(e) { console.warn('CTM write failed', e); }
 }
 
 document.getElementById('btn-match').addEventListener('click', () => doAction('match'));
@@ -195,19 +195,21 @@ document.getElementById('btn-notpin').addEventListener('click', () => {
   if (idx >= queue.length) return;
   const p = queue[idx];
   history.push(idx);
-  _fbWrite(p.pk, {
-    match_status: 'not_a_pin',
-    display_price: 0,
-    marked_not_a_pin_at: new Date().toISOString(),
-  });
   const prev = idx;
   idx++;
   showPin(idx);
   showUndo('Marked Not a Pin', () => {
-    _fbWrite(p.pk, { match_status: 'unreviewed', display_price: p.price || 0 });
+    try { _fbWrite(p.pk, { match_status: 'unreviewed', display_price: p.price || 0 }); } catch(e) {}
     idx = prev;
     showPin(idx);
   });
+  try {
+    _fbWrite(p.pk, {
+      match_status: 'not_a_pin',
+      display_price: 0,
+      marked_not_a_pin_at: new Date().toISOString(),
+    });
+  } catch(e) { console.warn('not-a-pin write failed', e); }
 });
 
 document.getElementById('btn-skip').addEventListener('click', () => {
@@ -276,7 +278,8 @@ function _fbPath(pk) {
 function _getUser() {
   let u = localStorage.getItem("fpins_reviewer");
   if (!u) {
-    u = (window.prompt("Your name (saved for pricing records):") || "").trim().slice(0, 30);
+    try { u = (window.prompt("Your name (saved for pricing records):") || "").trim().slice(0, 30); }
+    catch(e) { u = ""; }
     if (u) localStorage.setItem("fpins_reviewer", u);
     else u = "unknown";
   }
