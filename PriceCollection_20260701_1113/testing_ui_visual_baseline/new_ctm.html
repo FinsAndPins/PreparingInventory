@@ -34,12 +34,12 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
   min-height:0;padding-bottom:env(safe-area-inset-bottom,0px)}
 #crop-wrap{flex:4;background:#1a1a1a;display:flex;align-items:center;
   justify-content:center;border-bottom:2px solid #333;overflow:hidden;position:relative}
-#crop-img{max-width:calc(100% - 60px);max-height:100%;object-fit:contain}
+#crop-img{width:calc(100% - 60px);max-height:100%;object-fit:contain}
 #crop-label{position:absolute;top:8px;left:8px;font-size:11px;color:#888;
   background:rgba(0,0,0,.6);padding:2px 6px;border-radius:4px}
 #thumb-wrap{flex:2;background:#0e1a0e;display:flex;align-items:center;
   justify-content:center;overflow:hidden;position:relative}
-#thumb-img{max-width:calc(100% - 60px);max-height:100%;object-fit:contain}
+#thumb-img{width:calc(100% - 60px);max-height:100%;object-fit:contain}
 #price-badge{position:absolute;bottom:8px;left:8px;font-size:14px;font-weight:700;
   color:#fff;background:rgba(0,0,0,.75);padding:3px 8px;border-radius:5px}
 /* Swipe hint overlay */
@@ -51,7 +51,8 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
 .sh-r{color:#6eff6e;font-size:32px;font-weight:900}
 /* Button rail */
 #btn-rail{position:absolute;right:0;top:0;bottom:0;
-  width:56px;display:flex;flex-direction:column;z-index:50}
+  width:56px;display:flex;flex-direction:column;z-index:50;
+  padding-bottom:env(safe-area-inset-bottom,0px)}
 .rail-btn{flex:1;border:none;font-size:12px;font-weight:700;cursor:pointer;
   display:flex;align-items:center;justify-content:center;text-align:center;
   line-height:1.2;padding:0 2px}
