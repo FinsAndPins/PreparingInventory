@@ -127,7 +127,7 @@ const FB_CFG   = {"apiKey": "AIzaSyB5HoTCon9uIFJqnF506tB_jORAG1HvI7o", "authDoma
 const TEST_RUN_ID = "test_PriceCollection_20260701_1113__build_5228_visual_baseline";
 const APPROACH_ID = "visual_baseline";
 const RUN_NAME    = "PriceCollection_20260701_1113";
-const SKIP_MS  = ["auto_match", "no_match", "not_a_pin", "match"];
+const SKIP_MS  = ["not_a_pin", "match", "no_match", "auto_match"];
 
 const STORE_KEY = 'ctm_idx_' + RUN_NAME;
 const queue = PINS.filter(p => !SKIP_MS.includes(p.ms));
@@ -266,14 +266,18 @@ document.getElementById('nav-menu').addEventListener('click', function(e){
 });
 </script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 <script>
-if (FB_CFG && FB_CFG.apiKey) {
-  const _app = firebase.initializeApp(FB_CFG);
-  window._db = firebase.firestore(_app);
-}
-function _fbPath(pk) {
-  return "pin_pricing_tests/" + TEST_RUN_ID + "/" + APPROACH_ID + "/pins/" + pk;
+(function() {
+  if (!FB_CFG || !FB_CFG.apiKey || !FB_CFG.databaseURL) return;
+  try {
+    const _app = firebase.initializeApp(FB_CFG);
+    window._rtdb = firebase.database(_app);
+  } catch(e) { console.warn('Firebase init failed', e); }
+})();
+// RTDB path: dots in pk mangled to underscores (RTDB key requirement)
+function _rtdbPath(pk) {
+  return "pin_pricing_tests/" + TEST_RUN_ID + "/" + APPROACH_ID + "/pins/" + pk.replace(/\./g, "_");
 }
 function _getUser() {
   let u = localStorage.getItem("fpins_reviewer");
@@ -285,52 +289,35 @@ function _getUser() {
   }
   return u;
 }
+// Write to RTDB (not Firestore — Firestore rejects 5-segment paths).
+// pin_key is stored as a value field so hydration can match by original key.
 function _fbWrite(pk, fields) {
-  if (!window._db) return Promise.resolve();
-  return window._db.doc(_fbPath(pk)).set(
-    Object.assign({}, fields, {reviewed_by: _getUser()}), {merge:true});
+  if (!window._rtdb) return Promise.resolve();
+  return window._rtdb.ref(_rtdbPath(pk)).update(
+    Object.assign({pin_key: pk}, fields, {reviewed_by: _getUser()})
+  );
 }
 </script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 <script>
-// Hydrate from Firebase: remove already-reviewed pins from queue.
-// Auto-match data lives in RTDB; manual CTM reviews go to Firestore — check both.
+// Hydrate from RTDB: remove already-reviewed pins from queue.
+// All pin data (auto-match + CTM v2 reviews) lives in RTDB.
 (async function hydrateFromFirebase() {
+  if (!window._rtdb) return;
   const SKIP = new Set(SKIP_MS);
   const fbPath = 'pin_pricing_tests/' + TEST_RUN_ID + '/' + APPROACH_ID + '/pins';
   let removed = 0;
-
-  // 1. RTDB — primary source (auto-match writes here)
   try {
-    const app = (typeof firebase !== 'undefined') && firebase.apps && firebase.apps[0];
-    if (app && FB_CFG.databaseURL) {
-      const rtdb = firebase.database(app);
-      const snap = await rtdb.ref(fbPath).once('value');
-      const fbPins = snap.val() || {};
-      for (const fbPin of Object.values(fbPins)) {
-        const ms  = fbPin.match_status;
-        const pk  = fbPin.pin_key;
-        if (ms && pk && SKIP.has(ms)) {
-          const qi = queue.findIndex(p => p.pk === pk);
-          if (qi !== -1) { queue.splice(qi, 1); removed++; }
-        }
+    const snap = await window._rtdb.ref(fbPath).once('value');
+    const fbPins = snap.val() || {};
+    for (const fbPin of Object.values(fbPins)) {
+      const ms = fbPin.match_status;
+      const pk = fbPin.pin_key;
+      if (ms && pk && SKIP.has(ms)) {
+        const qi = queue.findIndex(p => p.pk === pk);
+        if (qi !== -1) { queue.splice(qi, 1); removed++; }
       }
     }
   } catch(e) { console.warn('CTM RTDB hydration failed', e); }
-
-  // 2. Firestore — manual CTM v2 reviews (match/no_match saved here)
-  if (window._db) {
-    try {
-      const snap = await window._db.collection(fbPath).get();
-      snap.forEach(doc => {
-        const ms = (doc.data() || {}).match_status;
-        if (ms && SKIP.has(ms)) {
-          const qi = queue.findIndex(p => p.pk === doc.id);
-          if (qi !== -1) { queue.splice(qi, 1); removed++; }
-        }
-      });
-    } catch(e) { console.warn('CTM Firestore hydration failed', e); }
-  }
 
   if (removed > 0) {
     console.log('CTM hydrated: removed ' + removed + ' reviewed pins');

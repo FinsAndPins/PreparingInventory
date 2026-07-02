@@ -354,14 +354,18 @@ document.getElementById('nav-menu').addEventListener('click', function(e){
 });
 </script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 <script>
-if (FB_CFG && FB_CFG.apiKey) {
-  const _app = firebase.initializeApp(FB_CFG);
-  window._db = firebase.firestore(_app);
-}
-function _fbPath(pk) {
-  return "pin_pricing_tests/" + TEST_RUN_ID + "/" + APPROACH_ID + "/pins/" + pk;
+(function() {
+  if (!FB_CFG || !FB_CFG.apiKey || !FB_CFG.databaseURL) return;
+  try {
+    const _app = firebase.initializeApp(FB_CFG);
+    window._rtdb = firebase.database(_app);
+  } catch(e) { console.warn('Firebase init failed', e); }
+})();
+// RTDB path: dots in pk mangled to underscores (RTDB key requirement)
+function _rtdbPath(pk) {
+  return "pin_pricing_tests/" + TEST_RUN_ID + "/" + APPROACH_ID + "/pins/" + pk.replace(/\./g, "_");
 }
 function _getUser() {
   let u = localStorage.getItem("fpins_reviewer");
@@ -373,30 +377,34 @@ function _getUser() {
   }
   return u;
 }
+// Write to RTDB (not Firestore — Firestore rejects 5-segment paths).
+// pin_key is stored as a value field so hydration can match by original key.
 function _fbWrite(pk, fields) {
-  if (!window._db) return Promise.resolve();
-  return window._db.doc(_fbPath(pk)).set(
-    Object.assign({}, fields, {reviewed_by: _getUser()}), {merge:true});
+  if (!window._rtdb) return Promise.resolve();
+  return window._rtdb.ref(_rtdbPath(pk)).update(
+    Object.assign({pin_key: pk}, fields, {reviewed_by: _getUser()})
+  );
 }
 </script>
 <script>
-// Hydrate CTP v2 from Firestore: update prices, match statuses, and confirmed slots
+// Hydrate CTP v2 from RTDB: update prices, match statuses, and confirmed slots
 (async function hydrateCTP() {
-  if (!window._db) return;
+  if (!window._rtdb) return;
   try {
     const fbPath = 'pin_pricing_tests/' + TEST_RUN_ID + '/' + APPROACH_ID + '/pins';
-    const snap = await window._db.collection(fbPath).get();
-    if (snap.empty) return;
+    const snap = await window._rtdb.ref(fbPath).once('value');
+    const fbPins = snap.val() || {};
+    if (!Object.keys(fbPins).length) return;
     let updated = 0;
-    snap.forEach(doc => {
-      const d = doc.data() || {};
-      const pk = doc.id;
+    for (const fbPin of Object.values(fbPins)) {
+      const pk = fbPin.pin_key;
+      if (!pk) continue;
       const pi = PINS.findIndex(p => p.pk === pk);
-      if (pi === -1) return;
-      if (d.display_price != null) { PINS[pi].price = d.display_price; updated++; }
-      if (d.match_status)           PINS[pi].ms = d.match_status;
-      if (d.selected_candidate_idx != null) PINS[pi]._fbCandIdx = d.selected_candidate_idx;
-    });
+      if (pi === -1) continue;
+      if (fbPin.display_price != null) { PINS[pi].price = fbPin.display_price; updated++; }
+      if (fbPin.match_status)           PINS[pi].ms = fbPin.match_status;
+      if (fbPin.selected_candidate_idx != null) PINS[pi]._fbCandIdx = fbPin.selected_candidate_idx;
+    }
     if (updated === 0) return;
     console.log('CTP: hydrated ' + updated + ' pins from Firebase');
     // Re-render with updated prices/statuses

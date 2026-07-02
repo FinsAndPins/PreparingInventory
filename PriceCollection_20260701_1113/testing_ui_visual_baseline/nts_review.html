@@ -311,14 +311,18 @@ document.getElementById('nav-menu').addEventListener('click', function(e){
 });
 </script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 <script>
-if (FB_CFG && FB_CFG.apiKey) {
-  const _app = firebase.initializeApp(FB_CFG);
-  window._db = firebase.firestore(_app);
-}
-function _fbPath(pk) {
-  return "pin_pricing_tests/" + TEST_RUN_ID + "/" + APPROACH_ID + "/pins/" + pk;
+(function() {
+  if (!FB_CFG || !FB_CFG.apiKey || !FB_CFG.databaseURL) return;
+  try {
+    const _app = firebase.initializeApp(FB_CFG);
+    window._rtdb = firebase.database(_app);
+  } catch(e) { console.warn('Firebase init failed', e); }
+})();
+// RTDB path: dots in pk mangled to underscores (RTDB key requirement)
+function _rtdbPath(pk) {
+  return "pin_pricing_tests/" + TEST_RUN_ID + "/" + APPROACH_ID + "/pins/" + pk.replace(/\./g, "_");
 }
 function _getUser() {
   let u = localStorage.getItem("fpins_reviewer");
@@ -330,10 +334,13 @@ function _getUser() {
   }
   return u;
 }
+// Write to RTDB (not Firestore — Firestore rejects 5-segment paths).
+// pin_key is stored as a value field so hydration can match by original key.
 function _fbWrite(pk, fields) {
-  if (!window._db) return Promise.resolve();
-  return window._db.doc(_fbPath(pk)).set(
-    Object.assign({}, fields, {reviewed_by: _getUser()}), {merge:true});
+  if (!window._rtdb) return Promise.resolve();
+  return window._rtdb.ref(_rtdbPath(pk)).update(
+    Object.assign({pin_key: pk}, fields, {reviewed_by: _getUser()})
+  );
 }
 </script>
 </body></html>
