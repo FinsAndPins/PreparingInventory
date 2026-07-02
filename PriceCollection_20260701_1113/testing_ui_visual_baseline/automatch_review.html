@@ -161,6 +161,17 @@ try {
   }
 } catch(e) { console.warn('Firebase init failed', e); }
 
+// ── Reviewer name (persisted in localStorage) ─────────────────────────────────
+function _getUser() {
+  let u = localStorage.getItem('fpins_reviewer');
+  if (!u) {
+    u = (window.prompt('Your name (saved for review records):') || '').trim().slice(0, 30);
+    if (u) localStorage.setItem('fpins_reviewer', u);
+    else u = 'unknown';
+  }
+  return u;
+}
+
 // ── State ─────────────────────────────────────────────────────────────────────
 const rejected = new Set();
 let undoTimer  = null;
@@ -169,6 +180,9 @@ let sortMode   = 'price';
 let confirmed  = false;
 
 // ── Hydrate from Firebase on load ─────────────────────────────────────────────
+// Removes already-reviewed pins from ALL_PINS on page load.
+// RTDB keys have dots converted to underscores, so we must look up by mangled key.
+// A pin is "done" if: auto_match_review is confirmed/rejected OR match_status is match/no_match.
 (async function hydrateFromFirebase() {
   if (!db) return;
   try {
@@ -176,20 +190,23 @@ let confirmed  = false;
       'pin_pricing_tests/' + TEST_RUN_ID + '/' + APPROACH_ID + '/pins'
     ).once('value');
     const fbPins = snap.val() || {};
+    const DONE_MS = new Set(['match', 'no_match', 'priced']);
     let alreadyDone = 0;
-    for (const pin of ALL_PINS) {
-      const fbPin = fbPins[pin.pin_key];
+    for (let i = ALL_PINS.length - 1; i >= 0; i--) {
+      const pin = ALL_PINS[i];
+      // RTDB converts dots in keys to underscores
+      const rtdbKey = pin.pin_key.replace(/\./g, '_');
+      const fbPin = fbPins[rtdbKey];
       if (!fbPin) continue;
       const rev = fbPin.auto_match_review;
-      if (rev === 'confirmed' || rev === 'rejected') {
+      const ms  = fbPin.match_status;
+      if (rev === 'confirmed' || rev === 'rejected' || DONE_MS.has(ms)) {
+        ALL_PINS.splice(i, 1);
         alreadyDone++;
-        // Remove from ALL_PINS so they don't appear in the list
-        const idx = ALL_PINS.indexOf(pin);
-        if (idx !== -1) ALL_PINS.splice(idx, 1);
       }
     }
     if (alreadyDone > 0) {
-      console.log('Hydrated: ' + alreadyDone + ' already reviewed pins removed');
+      console.log('Hydrated: removed ' + alreadyDone + ' already-reviewed pins');
       render();
     }
   } catch(e) { console.warn('Firebase hydration failed', e); }
@@ -387,6 +404,7 @@ async function confirmAll() {
 
   if (fbPfx && db) {
     // Single multi-path update — one network round-trip for all pins
+    const reviewer = _getUser();
     const multiUpdate = {};
     for (const pin of ALL_PINS) {
       const isRej = rejected.has(pin.pin_key);
@@ -395,6 +413,7 @@ async function confirmAll() {
       multiUpdate[base + 'auto_match_score']       = pin.auto_sim;
       multiUpdate[base + 'auto_match_reviewed_at'] = now;
       multiUpdate[base + 'auto_match_original']    = true;
+      multiUpdate[base + 'reviewed_by']            = reviewer;
       if (isRej) multiUpdate[base + 'match_status'] = 'unreviewed';
     }
     try { await db.ref(fbPfx).update(multiUpdate); }

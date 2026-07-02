@@ -352,9 +352,19 @@ if (FB_CFG && FB_CFG.apiKey) {
 function _fbPath(pk) {
   return "pin_pricing_tests/" + TEST_RUN_ID + "/" + APPROACH_ID + "/pins/" + pk;
 }
+function _getUser() {
+  let u = localStorage.getItem("fpins_reviewer");
+  if (!u) {
+    u = (window.prompt("Your name (saved for pricing records):") || "").trim().slice(0, 30);
+    if (u) localStorage.setItem("fpins_reviewer", u);
+    else u = "unknown";
+  }
+  return u;
+}
 function _fbWrite(pk, fields) {
   if (!window._db) return Promise.resolve();
-  return window._db.doc(_fbPath(pk)).set(fields, {merge:true});
+  return window._db.doc(_fbPath(pk)).set(
+    Object.assign({}, fields, {reviewed_by: _getUser()}), {merge:true});
 }
 </script>
 </body></html>

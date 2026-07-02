@@ -124,7 +124,7 @@ const FB_CFG   = {"apiKey": "AIzaSyB5HoTCon9uIFJqnF506tB_jORAG1HvI7o", "authDoma
 const TEST_RUN_ID = "test_PriceCollection_20260701_1113__build_5228_visual_baseline";
 const APPROACH_ID = "visual_baseline";
 const RUN_NAME    = "PriceCollection_20260701_1113";
-const SKIP_MS  = ["match", "no_match", "auto_match", "not_a_pin"];
+const SKIP_MS  = ["no_match", "match", "not_a_pin", "auto_match"];
 
 const STORE_KEY = 'ctm_idx_' + RUN_NAME;
 const queue = PINS.filter(p => !SKIP_MS.includes(p.ms));
@@ -270,9 +270,19 @@ if (FB_CFG && FB_CFG.apiKey) {
 function _fbPath(pk) {
   return "pin_pricing_tests/" + TEST_RUN_ID + "/" + APPROACH_ID + "/pins/" + pk;
 }
+function _getUser() {
+  let u = localStorage.getItem("fpins_reviewer");
+  if (!u) {
+    u = (window.prompt("Your name (saved for pricing records):") || "").trim().slice(0, 30);
+    if (u) localStorage.setItem("fpins_reviewer", u);
+    else u = "unknown";
+  }
+  return u;
+}
 function _fbWrite(pk, fields) {
   if (!window._db) return Promise.resolve();
-  return window._db.doc(_fbPath(pk)).set(fields, {merge:true});
+  return window._db.doc(_fbPath(pk)).set(
+    Object.assign({}, fields, {reviewed_by: _getUser()}), {merge:true});
 }
 </script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
