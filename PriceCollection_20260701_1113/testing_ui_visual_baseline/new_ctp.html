@@ -31,6 +31,7 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
 .fb{flex-shrink:0;padding:5px 9px;border-radius:14px;font-size:11px;
   border:1px solid #3a3a3a;background:#222;color:#888;cursor:pointer}
 .fb.active{background:#1e4fa0;color:#fff;border-color:#2a5298}
+.bar-label{flex-shrink:0;font-size:10px;color:#555;align-self:center;padding-right:2px}
 #wheels{flex:1;display:flex;overflow:hidden;min-height:0}
 #left-col{width:38%;display:flex;flex-direction:column;border-right:1px solid #2a2a2a}
 #mid-col{width:16%;display:flex;flex-direction:column;align-items:center;
@@ -76,15 +77,20 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
     <button id="ham-btn">&#9776;</button>
   </div>
   <div class="filter-bar">
-    <button class="fb active" data-s="price">$ High→Low</button>
-    <button class="fb" data-s="plow">$ Low→High</button>
-    <button class="fb" data-s="unrev">Unreviewed</button>
-    <button class="fb" data-f="hidden">Hidden</button>
-    <button class="fb" data-f="wdi">WDI</button>
-    <button class="fb" data-f="dec">DEC</button>
-    <button class="fb" data-f="dssh">DSSH</button>
-    <button class="fb" data-f="le">LE</button>
-    <button class="fb" data-f="">All</button>
+    <span class="bar-label">Sort:</span>
+    <button class="fb sort-btn active" data-sort="desc">$ High→Low</button>
+    <button class="fb sort-btn" data-sort="asc">$ Low→High</button>
+  </div>
+  <div class="filter-bar" style="border-top:1px solid #1a1a1a">
+    <span class="bar-label">Filter:</span>
+    <button class="fb filt-btn active" data-filter="all">All</button>
+    <button class="fb filt-btn" data-filter="nomatch">No Match</button>
+    <button class="fb filt-btn" data-filter="unrev">Unreviewed</button>
+    <button class="fb filt-btn" data-filter="hidden">Hidden</button>
+    <button class="fb filt-btn" data-filter="wdi">WDI</button>
+    <button class="fb filt-btn" data-filter="dec">DEC</button>
+    <button class="fb filt-btn" data-filter="dssh">DSSH</button>
+    <button class="fb filt-btn" data-filter="le">LE</button>
   </div>
 </div>
 <div id="nav-menu">
@@ -277,31 +283,41 @@ document.getElementById('ebay-btn').addEventListener('click', () => {
   if (q) window.open('https://www.ebay.com/sch/i.html?_nkw=' + encodeURIComponent(q) + '&LH_Sold=1&LH_Complete=1', '_blank');
 });
 
-document.querySelectorAll('.fb[data-s]').forEach(btn => {
+// Independent sort + filter state
+let curSort   = 'desc';   // 'desc' | 'asc'
+let curFilter = 'all';    // 'all' | 'nomatch' | 'unrev' | category key
+
+function applyFilterSort() {
+  const SKIP = ['match','no_match','auto_match','priced'];
+  let pins = [...PINS];
+  if (curFilter === 'nomatch')      pins = pins.filter(p => p.ms === 'no_match');
+  else if (curFilter === 'unrev')   pins = pins.filter(p => !SKIP.includes(p.ms));
+  else if (curFilter !== 'all')     pins = pins.filter(p => (p.cats||[]).includes(curFilter));
+  if (curSort === 'asc') pins.sort((a,b) => a.price - b.price);
+  else                   pins.sort((a,b) => b.price - a.price);
+  displayPins = pins;
+  buildLeftWheel();
+}
+
+document.querySelectorAll('.sort-btn').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.fb').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    const s = btn.dataset.s;
-    if (s === 'price') displayPins = [...PINS].sort((a,b) => b.price - a.price);
-    else if (s === 'plow') displayPins = [...PINS].sort((a,b) => a.price - b.price);
-    else if (s === 'unrev') displayPins = PINS.filter(p =>
-      !['match','no_match','auto_match','priced'].includes(p.ms));
-    buildLeftWheel();
+    curSort = btn.dataset.sort;
+    applyFilterSort();
   });
 });
 
-document.querySelectorAll('.fb[data-f]').forEach(btn => {
+document.querySelectorAll('.filt-btn').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.fb').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.filt-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    const f = btn.dataset.f;
-    if (!f) displayPins = [...PINS].sort((a,b) => b.price - a.price);
-    else displayPins = PINS.filter(p => (p.cats||[]).includes(f)).sort((a,b) => b.price - a.price);
-    buildLeftWheel();
+    curFilter = btn.dataset.filter;
+    applyFilterSort();
   });
 });
 
-buildLeftWheel();
+applyFilterSort();
 
 // Jump to specific pin if ?pin= param present (e.g. from contact sheet tap)
 (function(){
