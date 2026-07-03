@@ -173,11 +173,12 @@ function _getUser() {
 }
 
 // ── State ─────────────────────────────────────────────────────────────────────
-const rejected = new Set();
-let undoTimer  = null;
-let undoKey    = null;
-let sortMode   = 'price';
-let confirmed  = false;
+const rejected  = new Set();
+const writtenFb = new Set(); // keys already written to Firebase (as rejected)
+let undoTimer   = null;
+let undoKey     = null;
+let sortMode    = 'price';
+let confirmed   = false;
 
 // ── Hydrate from Firebase on load ─────────────────────────────────────────────
 // Removes already-reviewed pins from ALL_PINS on page load.
@@ -356,6 +357,21 @@ function undoReject(key) {
 function collapseCard(key) {
   const wrap = document.getElementById('w-' + esc(key));
   if (wrap) { wrap.style.height = '0'; wrap.style.opacity = '0'; }
+  // Write rejected status to Firebase immediately — don't wait for Done button
+  if (rejected.has(key) && db && !writtenFb.has(key)) {
+    writtenFb.add(key);
+    const fbPfx = 'pin_pricing_tests/' + TEST_RUN_ID + '/' + APPROACH_ID + '/pins';
+    const pin   = ALL_PINS.find(function(p){ return p.pin_key === key; });
+    const base  = key.replace(/\./g, '_') + '/';
+    const upd   = {};
+    upd[base + 'auto_match_review']      = 'rejected';
+    upd[base + 'auto_match_score']       = pin ? pin.auto_sim : null;
+    upd[base + 'auto_match_reviewed_at'] = Date.now();
+    upd[base + 'auto_match_original']    = true;
+    upd[base + 'reviewed_by']            = _getUser();
+    upd[base + 'match_status']           = 'unreviewed';
+    db.ref(fbPfx).update(upd).catch(function(e){ console.warn('Reject write failed', e); });
+  }
 }
 
 // ── Counter ───────────────────────────────────────────────────────────────────
@@ -407,6 +423,7 @@ async function confirmAll() {
     const reviewer = _getUser();
     const multiUpdate = {};
     for (const pin of ALL_PINS) {
+      if (writtenFb.has(pin.pin_key)) continue; // already written as rejected during this session
       const isRej = rejected.has(pin.pin_key);
       // RTDB keys use underscores (dots replaced); dots in multi-path keys = nested nodes
       const base  = pin.pin_key.replace(/\./g, '_') + '/';
