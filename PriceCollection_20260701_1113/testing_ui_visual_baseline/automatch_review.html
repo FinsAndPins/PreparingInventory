@@ -408,7 +408,8 @@ async function confirmAll() {
     const multiUpdate = {};
     for (const pin of ALL_PINS) {
       const isRej = rejected.has(pin.pin_key);
-      const base  = pin.pin_key + '/';
+      // RTDB keys use underscores (dots replaced); dots in multi-path keys = nested nodes
+      const base  = pin.pin_key.replace(/\./g, '_') + '/';
       multiUpdate[base + 'auto_match_review']      = isRej ? 'rejected' : 'confirmed';
       multiUpdate[base + 'auto_match_score']       = pin.auto_sim;
       multiUpdate[base + 'auto_match_reviewed_at'] = now;
