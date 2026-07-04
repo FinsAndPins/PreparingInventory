@@ -121,13 +121,12 @@ body{font-family:-apple-system,sans-serif;background:#111;color:#eee;overscroll-
 </div>
 
 <div id="menu-dd" role="menu">
-  <a href="index.html">&#8592; Harness</a>
   <a href="automatch_review.html" class="current">Auto-Match Review</a>
-  <a href="dinov2_review.html">DINOv2 Review</a>
-  <a href="contact_sheet.html">Contact Sheet</a>
+  <a href="new_ctm.html">ClickToMatch v2</a>
   <a href="nts_review.html">Slot Review</a>
   <a href="new_ctp.html">ClickToPrice v2</a>
-  <a href="new_ctm.html">ClickToMatch v2</a>
+  <a href="contact_sheet.html">Contact Sheet</a>
+  <a href="index.html">Overlay</a>
 </div>
 
 <div id="sort-bar">
@@ -369,7 +368,7 @@ function collapseCard(key) {
     upd[base + 'auto_match_reviewed_at'] = Date.now();
     upd[base + 'auto_match_original']    = true;
     upd[base + 'reviewed_by']            = _getUser();
-    upd[base + 'match_status']           = 'unreviewed';
+    upd[base + 'match_status']           = 'no_match';
     db.ref(fbPfx).update(upd).catch(function(e){ console.warn('Reject write failed', e); });
   }
 }
@@ -432,7 +431,7 @@ async function confirmAll() {
       multiUpdate[base + 'auto_match_reviewed_at'] = now;
       multiUpdate[base + 'auto_match_original']    = true;
       multiUpdate[base + 'reviewed_by']            = reviewer;
-      if (isRej) multiUpdate[base + 'match_status'] = 'unreviewed';
+      if (isRej) multiUpdate[base + 'match_status'] = 'no_match';
     }
     try { await db.ref(fbPfx).update(multiUpdate); }
     catch(e) { console.warn('Batch write failed', e); }
@@ -447,7 +446,7 @@ async function confirmAll() {
     '<p><strong>' + rem + ' match' + (rem === 1 ? '' : 'es') + ' confirmed.</strong></p>' +
     (rejected.size > 0
       ? '<p style="margin-top:8px;color:#aaa">' + rejected.size + ' pin' +
-        (rejected.size === 1 ? '' : 's') + ' returned to ClickToMatch queue.</p>'
+        (rejected.size === 1 ? '' : 's') + ' sent to ClickToPrice (no-match).</p>'
       : '') +
     '<p style="margin-top:24px"><a href="index.html" style="color:#6af;font-size:15px">&#8592; Back to Lexi Harness</a></p>'
   );

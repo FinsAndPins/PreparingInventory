@@ -77,7 +77,7 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
   font-weight:700;cursor:pointer;transition:opacity .15s}
 .nav-btn:disabled{opacity:.35;cursor:default}
 #back-btn{flex:4;background:#2a2a2a;color:#aaa}
-#nap-btn{flex:1;background:#3a1010;color:#cc4444;font-size:12px;border-radius:8px}
+#nap-btn{flex:2;background:#3a1010;color:#cc4444;font-size:14px;border-radius:8px}
 #next-btn{flex:4;background:#1e4fa0;color:#fff}
 /* ── Below-fold sections ── */
 #ebay-section,#manual-section{padding:10px 6px 8px;border-top:1px solid #222;margin-top:4px}
@@ -108,16 +108,6 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
       <button class="pd-undo" id="undo-btn">&#8617; Undo</button>
     </div>
   </div>
-  <div class="filter-bar">
-    <span class="bar-label">Filter:</span>
-    <button class="fb filt-btn active" data-filter="nomatch">No Match<span class="fb-cnt"></span></button>
-    <button class="fb filt-btn" data-filter="unrev">Unreviewed<span class="fb-cnt"></span></button>
-    <button class="fb filt-btn" data-filter="all">All<span class="fb-cnt"></span></button>
-    <button class="fb filt-btn" data-filter="wdi">WDI</button>
-    <button class="fb filt-btn" data-filter="dec">DEC</button>
-    <button class="fb filt-btn" data-filter="dssh">DSSH</button>
-    <button class="fb filt-btn" data-filter="le">LE</button>
-  </div>
 </div>
 <div id="nav-menu">
   <a href="automatch_review.html">Auto-Match Review</a>
@@ -146,6 +136,16 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
   </div>
 </div>
 <div id="bottom-nav">
+  <div class="filter-bar">
+    <span class="bar-label">Filter:</span>
+    <button class="fb filt-btn active" data-filter="nomatch">No Match<span class="fb-cnt"></span></button>
+    <button class="fb filt-btn" data-filter="unrev">Unreviewed<span class="fb-cnt"></span></button>
+    <button class="fb filt-btn" data-filter="all">All<span class="fb-cnt"></span></button>
+    <button class="fb filt-btn" data-filter="wdi">WDI</button>
+    <button class="fb filt-btn" data-filter="dec">DEC</button>
+    <button class="fb filt-btn" data-filter="dssh">DSSH</button>
+    <button class="fb filt-btn" data-filter="le">LE</button>
+  </div>
   <div class="nav-row">
     <button class="nav-btn" id="back-btn">← Back</button>
     <button class="nav-btn" id="nap-btn">NaP</button>
