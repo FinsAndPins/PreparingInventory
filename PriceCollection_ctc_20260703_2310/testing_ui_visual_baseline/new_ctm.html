@@ -121,7 +121,7 @@ const FB_CFG   = {"apiKey": "AIzaSyB5HoTCon9uIFJqnF506tB_jORAG1HvI7o", "authDoma
 const TEST_RUN_ID = "test_PriceCollection_ctc_20260703_2310__build_41560_visual_baseline";
 const APPROACH_ID = "visual_baseline";
 const RUN_NAME    = "PriceCollection_ctc_20260703_2310";
-const SKIP_MS  = ["not_a_pin", "no_match", "match", "auto_match"];
+const SKIP_MS  = ["not_a_pin", "no_match", "auto_match", "match"];
 
 const STORE_KEY = 'ctm_idx_' + RUN_NAME;
 const queue = PINS.filter(p => !SKIP_MS.includes(p.ms));
@@ -255,11 +255,31 @@ function _getUser() {
   }
   return u;
 }
+function _fbToast(msg, color) {
+  let t = document.getElementById('_fb_toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = '_fb_toast';
+    t.style.cssText = 'position:fixed;bottom:60px;left:50%;transform:translateX(-50%);'
+      + 'padding:6px 14px;border-radius:20px;font-size:13px;font-weight:600;'
+      + 'z-index:99999;pointer-events:none;transition:opacity .4s;opacity:0;white-space:nowrap';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.background = color;
+  t.style.color = '#fff';
+  t.style.opacity = '1';
+  clearTimeout(t._hide);
+  t._hide = setTimeout(() => { t.style.opacity = '0'; }, 2000);
+}
 function _fbWrite(pk, fields) {
   const url = _DB_BASE + '/' + _rtdbPath(pk) + '.json';
   const body = JSON.stringify(Object.assign({ pin_key: pk }, fields, { reviewed_by: _getUser() }));
   return fetch(url, { method: 'PATCH', body, headers: { 'Content-Type': 'application/json' } })
-    .catch(e => console.warn('Firebase write failed', e));
+    .then(r => {
+      if (!r.ok) { _fbToast('⚠ Save failed (' + r.status + ')', '#8b0000'); console.warn('Firebase write HTTP', r.status); }
+    })
+    .catch(e => { _fbToast('⚠ Save failed — check network', '#8b0000'); console.warn('Firebase write failed', e); });
 }
 async function _fbReadAllPins() {
   const url = _DB_BASE + '/pin_pricing_tests/' + TEST_RUN_ID + '/' + APPROACH_ID + '/pins.json';
