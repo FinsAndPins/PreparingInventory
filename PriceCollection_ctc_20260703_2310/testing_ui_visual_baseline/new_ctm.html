@@ -121,7 +121,7 @@ const FB_CFG   = {"apiKey": "AIzaSyB5HoTCon9uIFJqnF506tB_jORAG1HvI7o", "authDoma
 const TEST_RUN_ID = "test_PriceCollection_ctc_20260703_2310__build_41560_visual_baseline";
 const APPROACH_ID = "visual_baseline";
 const RUN_NAME    = "PriceCollection_ctc_20260703_2310";
-const SKIP_MS  = ["not_a_pin", "auto_match", "no_match", "match"];
+const SKIP_MS  = ["no_match", "match", "not_a_pin", "auto_match"];
 
 const STORE_KEY = 'ctm_idx_' + RUN_NAME;
 const queue = PINS.filter(p => !SKIP_MS.includes(p.ms));
@@ -294,23 +294,17 @@ async function _fbReadAllPins() {
 // Hydrate from RTDB: remove already-reviewed pins from queue.
 // All pin data (auto-match + CTM v2 reviews) lives in RTDB.
 (async function hydrateFromFirebase() {
-  if (!window._rtdb) return;
-  const SKIP = new Set(SKIP_MS);
-  const fbPath = 'pin_pricing_tests/' + TEST_RUN_ID + '/' + APPROACH_ID + '/pins';
-  let removed = 0;
-  try {
-    const snap = await window._rtdb.ref(fbPath).once('value');
-    const fbPins = snap.val() || {};
-    for (const fbPin of Object.values(fbPins)) {
-      const ms = fbPin.match_status;
-      const pk = fbPin.pin_key;
-      if (ms && pk && SKIP.has(ms)) {
-        const qi = queue.findIndex(p => p.pk === pk);
-        if (qi !== -1) { queue.splice(qi, 1); removed++; }
-      }
+  const SKIP    = new Set(SKIP_MS);
+  const fbPins  = await _fbReadAllPins();
+  let removed   = 0;
+  for (const fbPin of Object.values(fbPins)) {
+    const ms = fbPin.match_status;
+    const pk = fbPin.pin_key;
+    if (ms && pk && SKIP.has(ms)) {
+      const qi = queue.findIndex(p => p.pk === pk);
+      if (qi !== -1) { queue.splice(qi, 1); removed++; }
     }
-  } catch(e) { console.warn('CTM RTDB hydration failed', e); }
-
+  }
   if (removed > 0) {
     console.log('CTM hydrated: removed ' + removed + ' reviewed pins');
     idx = 0; history = [];
