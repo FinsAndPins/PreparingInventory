@@ -62,6 +62,14 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
 #delta-val{font-size:20px;font-weight:800;color:#fff}
 #delta-lbl{font-size:9px;color:#666;margin-top:2px}
 #pin-idx{font-size:11px;color:#666;text-align:center}
+.var-bar{display:flex;gap:4px;padding:4px 8px;overflow-x:auto;
+  -webkit-overflow-scrolling:touch;scrollbar-width:none;
+  border-bottom:1px solid #222;flex-shrink:0}
+.var-bar::-webkit-scrollbar{display:none}
+.vb{flex-shrink:0;padding:3px 8px;border-radius:12px;font-size:11px;
+  border:1px solid #3a3a3a;background:#222;color:#888;cursor:pointer}
+.vb.active{background:#1e4fa0;color:#fff;border-color:#2a5298}
+.vb-lbl{flex-shrink:0;font-size:10px;color:#555;align-self:center;padding-right:2px}
 </style>
 </head><body>
 <div id="hdr">
@@ -85,6 +93,14 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
   <a href="new_ctp.html">ClickToPrice v2</a>
   <a href="contact_sheet.html">Contact Sheet</a>
   <a href="index.html">Overlay</a>
+</div>
+<div class="var-bar">
+  <span class="vb-lbl">Save≥:</span>
+  <button class="vb active" data-var="0">All (<span id="v0-cnt">…</span>)</button>
+  <button class="vb" data-var="5">&gt;$5 (<span id="v5-cnt">…</span>)</button>
+  <button class="vb" data-var="10">&gt;$10 (<span id="v10-cnt">…</span>)</button>
+  <button class="vb" data-var="15">&gt;$15 (<span id="v15-cnt">…</span>)</button>
+  <button class="vb" data-var="20">&gt;$20 (<span id="v20-cnt">…</span>)</button>
 </div>
 
 <div id="wheels">
@@ -118,61 +134,89 @@ document.getElementById('nts-count').textContent = PINS.length + ' pins';
 
 const lw = document.getElementById('left-wheel');
 const rw = document.getElementById('right-wheel');
-const deltaVal  = document.getElementById('delta-val');
-const pinLabel  = document.getElementById('pin-label');
-const pinIdx    = document.getElementById('pin-idx');
-const confirmBtn= document.getElementById('confirm-btn');
-const undoLnk   = document.getElementById('undo-lnk');
+const deltaVal   = document.getElementById('delta-val');
+const pinLabel   = document.getElementById('pin-label');
+const pinIdx     = document.getElementById('pin-idx');
+const confirmBtn = document.getElementById('confirm-btn');
+const undoLnk    = document.getElementById('undo-lnk');
 
 const ITEM_H = 120;
-let selPin = 0;
+let selPin  = 0;
 let selCand = 0;
 let confirmed = {};
-let lastUndo = null;
+let lastUndo  = null;
+let varFilter = 0;
+let displayPins = [...PINS];
+let skipRWScroll = false;
 
 function fmt(p) { return (p != null && !isNaN(p) && p >= 0) ? '$' + Math.round(p) : '$?'; }
 
-PINS.forEach((p, i) => {
-  const el = document.createElement('div');
-  el.className = 'wheel-item' + (i === 0 ? ' selected' : '');
-  el.dataset.idx = i;
-  const img = document.createElement('img');
-  img.src = p.b64 || ('../crops/' + encodeURIComponent(p.crop));
-  if (!p.b64) img.onerror = function(){ this.src=GRAY; this.onerror=null; };
-  img.loading = 'lazy';
-  const prEl = document.createElement('div');
-  prEl.className = 'wi-price';
-  prEl.textContent = fmt(p.slot0_p) + ' (Δ' + fmt(p.var) + ')';
-  const chk = document.createElement('div');
-  chk.className = 'wi-check'; chk.textContent = '✓';
-  el.append(img, prEl, chk);
-  if (p.auto_slot !== null && p.auto_slot !== undefined && p.auto_slot !== 0) {
-    const asl = document.createElement('div');
-    asl.className = 'wi-slot wi-auto';
-    asl.textContent = 'AUTO s' + p.auto_slot;
-    el.appendChild(asl);
-  }
-  el.addEventListener('click', () => lw.scrollTo({top: i * ITEM_H, behavior:'smooth'}));
-  lw.appendChild(el);
-});
+// Savings = chosen price minus cheapest available candidate
+function calcSavings(p) {
+  const prices = (p.cands||[]).filter(c => c.p > 0).map(c => c.p);
+  if (!prices.length) return 0;
+  return Math.max(0, (p.price || p.slot0_p) - Math.min(...prices));
+}
+
+function updateVarCounts() {
+  [0, 5, 10, 15, 20].forEach(t => {
+    const cnt = PINS.filter(p => calcSavings(p) >= t).length;
+    const el = document.getElementById('v' + t + '-cnt');
+    if (el) el.textContent = cnt;
+  });
+}
+
+function buildLeftWheel() {
+  lw.innerHTML = '';
+  displayPins.forEach((p, i) => {
+    const isConf = confirmed[p.pk] != null;
+    const el = document.createElement('div');
+    el.className = 'wheel-item' + (i === 0 ? ' selected' : '') + (isConf ? ' confirmed' : '');
+    el.dataset.idx = i;
+    const img = document.createElement('img');
+    img.src = p.b64 || ('../crops/' + encodeURIComponent(p.crop));
+    if (!p.b64) img.onerror = function(){ this.src=GRAY; this.onerror=null; };
+    img.loading = 'lazy';
+    const savings = calcSavings(p);
+    const prEl = document.createElement('div');
+    prEl.className = 'wi-price';
+    prEl.textContent = fmt(p.price || p.slot0_p) + ' (Δ' + fmt(savings) + ')';
+    const chk = document.createElement('div');
+    chk.className = 'wi-check'; chk.textContent = '✓';
+    el.append(img, prEl, chk);
+    if (p.auto_slot !== null && p.auto_slot !== undefined && p.auto_slot !== 0) {
+      const asl = document.createElement('div');
+      asl.className = 'wi-slot wi-auto';
+      asl.textContent = 'AUTO s' + p.auto_slot;
+      el.appendChild(asl);
+    }
+    el.addEventListener('click', () => lw.scrollTo({top: i * ITEM_H, behavior:'smooth'}));
+    lw.appendChild(el);
+  });
+  lw.scrollTop = 0; selPin = 0; selCand = 0;
+  buildRightWheel(0);
+  updateVarCounts();
+}
 
 function buildRightWheel(pi) {
   rw.innerHTML = '';
-  const p = PINS[pi]; if (!p) return;
-  // Sort: chosen (slot 0) first, then all others descending by price
-  // (highest-priced alternatives are nearest the chosen slot; scroll down for cheaper options)
+  const p = displayPins[pi]; if (!p) return;
+  // Sort all candidates ascending by price (cheapest first)
   const allCands = (p.cands || []).map((c, origIdx) => ({...c, origIdx}));
-  const chosen0  = allCands.find(c => c.origIdx === 0);
-  const others   = allCands.filter(c => c.origIdx !== 0)
-                           .sort((a, b) => (b.p || 0) - (a.p || 0)); // desc: highest first
-  const sorted   = [chosen0, ...others].filter(Boolean);
+  const sorted = allCands.slice().sort((a, b) => (a.p || 0) - (b.p || 0));
   p._sorted = sorted;
-  const confOrigIdx = confirmed[p.pk];
+  const confOrigIdx = confirmed[p.pk] != null ? confirmed[p.pk] : undefined;
+  // Chosen = confirmed > auto_slot > slot 0
+  const chosenOrigIdx = confOrigIdx != null ? confOrigIdx :
+                        (p.auto_slot != null ? p.auto_slot : 0);
+  const initSi = Math.max(0, sorted.findIndex(c => c.origIdx === chosenOrigIdx));
+
   sorted.forEach((c, si) => {
-    const isChosen = c.origIdx === 0;  // slot 0 = what script priced at
+    const isChosen = c.origIdx === chosenOrigIdx;
+    const isSlot0  = c.origIdx === 0 && !isChosen;
     const isConf   = confOrigIdx === c.origIdx;
     const el = document.createElement('div');
-    el.className = 'wheel-item' + (si===0?' selected':'') + (isConf?' confirmed':'');
+    el.className = 'wheel-item' + (si === initSi ? ' selected' : '') + (isConf ? ' confirmed' : '');
     el.dataset.si = si;
     const img = document.createElement('img');
     img.src = c.thumb || '';
@@ -186,6 +230,11 @@ function buildRightWheel(pi) {
     if (isChosen) {
       const badge = document.createElement('div');
       badge.className = 'wi-chosen'; badge.textContent = 'CHOSEN';
+      el.appendChild(badge);
+    } else if (isSlot0) {
+      const badge = document.createElement('div');
+      badge.className = 'wi-chosen'; badge.textContent = 'CHEAP';
+      badge.style.background = '#1e4fa0';
       el.appendChild(badge);
     }
     if (isConf) {
@@ -201,17 +250,25 @@ function buildRightWheel(pi) {
     });
     rw.appendChild(el);
   });
-  // Start at cheapest (index 0 of sorted list)
-  selCand = 0; rw.scrollTop = 0;
+  // Position: show chosen item with 1 cheaper option above it (ascending sort)
+  selCand = initSi;
+  skipRWScroll = true;
+  rw.scrollTop = Math.max(0, (initSi - 1) * ITEM_H);
+  setTimeout(() => { skipRWScroll = false; }, 200);
   updateDelta();
 }
 
 function updateDelta() {
-  const p = PINS[selPin]; if (!p) return;
+  const p = displayPins[selPin]; if (!p) return;
   const sorted = p._sorted || (p.cands||[]).map((c,i)=>({...c,origIdx:i}));
   const c = sorted[selCand] || sorted[0]; if (!c) return;
-  // savings = how much cheaper this listing is vs the chosen (slot 0) price
-  const savings = p.slot0_p - c.p;
+  // Delta vs chosen price (auto_slot price if set, else slot0)
+  const confOrigIdx = confirmed[p.pk] != null ? confirmed[p.pk] : undefined;
+  const chosenOrigIdx = confOrigIdx != null ? confOrigIdx :
+                        (p.auto_slot != null ? p.auto_slot : 0);
+  const chosenCand = sorted.find(x => x.origIdx === chosenOrigIdx);
+  const chosenPrice = chosenCand ? (chosenCand.p || p.slot0_p) : p.slot0_p;
+  const savings = chosenPrice - (c.p || 0);
   if (Math.abs(savings) < 0.5) {
     deltaVal.textContent = '$0'; deltaVal.style.color = '#fff';
   } else if (savings > 0) {
@@ -220,21 +277,24 @@ function updateDelta() {
     deltaVal.textContent = '+$' + Math.round(-savings); deltaVal.style.color = '#ff6e6e';
   }
   pinLabel.textContent = p.title.slice(0,50) || p.pk;
-  pinIdx.textContent   = (selPin+1) + '/' + PINS.length;
-  const isChosen = c.origIdx === 0;
+  pinIdx.textContent   = (selPin+1) + '/' + displayPins.length;
+  const isChosen = c.origIdx === chosenOrigIdx;
   if (isChosen) {
-    confirmBtn.textContent = 'Keep Chosen (' + fmt(p.slot0_p) + ')';
+    confirmBtn.textContent = 'Keep Chosen (' + fmt(chosenPrice) + ')';
     confirmBtn.style.background = '#2a2a6b';
-  } else {
+  } else if (savings > 0) {
     confirmBtn.textContent = 'Use S' + c.origIdx + ' (' + fmt(c.p) + ') — saves $' + Math.round(savings);
     confirmBtn.style.background = '#1a5e1a';
+  } else {
+    confirmBtn.textContent = 'Switch to S' + c.origIdx + ' (' + fmt(c.p) + ')';
+    confirmBtn.style.background = '#5e1a1a';
   }
 }
 
 function debounce(fn, ms) { let t; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; }
 
 lw.addEventListener('scroll', debounce(() => {
-  const i = Math.min(PINS.length-1, Math.max(0, Math.round(lw.scrollTop/ITEM_H)));
+  const i = Math.min(displayPins.length-1, Math.max(0, Math.round(lw.scrollTop/ITEM_H)));
   sessionStorage.setItem(STORE_KEY, lw.scrollTop);
   if (i !== selPin) {
     selPin = i;
@@ -244,7 +304,8 @@ lw.addEventListener('scroll', debounce(() => {
 }, 80));
 
 rw.addEventListener('scroll', debounce(() => {
-  const p = PINS[selPin]; if (!p) return;
+  if (skipRWScroll) return;
+  const p = displayPins[selPin]; if (!p) return;
   const sorted = p._sorted || (p.cands||[]);
   const ci = Math.min(sorted.length-1, Math.max(0, Math.round(rw.scrollTop/ITEM_H)));
   if (ci !== selCand) {
@@ -255,19 +316,18 @@ rw.addEventListener('scroll', debounce(() => {
 }, 80));
 
 confirmBtn.addEventListener('click', () => {
-  const p = PINS[selPin]; if (!p) return;
+  const p = displayPins[selPin]; if (!p) return;
   const sorted = p._sorted || (p.cands||[]).map((c,i)=>({...c,origIdx:i}));
   const c = sorted[selCand];
   const origIdx = c ? c.origIdx : 0;
   const newPrice = c ? (c.p || 0) : (p.slot0_p || 0);
-  const prevCand = confirmed[p.pk];
+  const prevCand = confirmed[p.pk] != null ? confirmed[p.pk] : undefined;
   confirmed[p.pk] = origIdx;
-  // Update left wheel price display immediately
   const lwItem = lw.querySelectorAll('.wheel-item')[selPin];
   if (lwItem) {
     lwItem.classList.add('confirmed');
     const prEl = lwItem.querySelector('.wi-price');
-    if (prEl) prEl.textContent = fmt(newPrice);
+    if (prEl) prEl.textContent = fmt(newPrice) + ' (Δ' + fmt(calcSavings(p)) + ')';
   }
   rw.querySelectorAll('.wheel-item').forEach((el,ei) => el.classList.toggle('confirmed', ei===selCand));
   _fbWrite(p.pk, {
@@ -277,14 +337,14 @@ confirmBtn.addEventListener('click', () => {
   });
   undoLnk.style.display = 'inline';
   lastUndo = { pk: p.pk, pinI: selPin, prevCand, prevPrice: p.slot0_p };
-  p.slot0_p = newPrice;  // keep in-memory state in sync
+  p.slot0_p = newPrice;
   updateDelta();
 });
 
 undoLnk.addEventListener('click', () => {
   if (!lastUndo) return;
   const { pk, pinI, prevCand, prevPrice } = lastUndo;
-  const p = PINS[pinI];
+  const p = displayPins[pinI];
   if (prevCand != null) {
     confirmed[pk] = prevCand;
     _fbWrite(pk, { selected_candidate_idx: prevCand, display_price: prevPrice || 0 });
@@ -293,28 +353,41 @@ undoLnk.addEventListener('click', () => {
     _fbWrite(pk, { selected_candidate_idx: 0, display_price: prevPrice || 0 });
     lw.querySelectorAll('.wheel-item')[pinI]?.classList.remove('confirmed');
   }
-  // Restore left wheel price display
   if (prevPrice != null) {
     const lwItem = lw.querySelectorAll('.wheel-item')[pinI];
-    if (lwItem) { const prEl = lwItem.querySelector('.wi-price'); if (prEl) prEl.textContent = fmt(prevPrice); }
-    if (p) p.slot0_p = prevPrice;
+    if (lwItem) {
+      const prEl = lwItem.querySelector('.wi-price');
+      if (prEl && p) prEl.textContent = fmt(prevPrice) + ' (Δ' + fmt(calcSavings(p)) + ')';
+      if (p) p.slot0_p = prevPrice;
+    }
   }
   lastUndo = null; undoLnk.style.display = 'none';
   buildRightWheel(selPin); updateDelta();
 });
 
-// Restore scroll position
+// Variance filter buttons
+document.querySelectorAll('.vb').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.vb').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    varFilter = parseInt(btn.dataset.var, 10);
+    displayPins = varFilter > 0 ? PINS.filter(p => calcSavings(p) >= varFilter) : [...PINS];
+    selPin = 0; selCand = 0;
+    buildLeftWheel();
+  });
+});
+
+// Initial build + restore scroll
+buildLeftWheel();
 const savedScroll = parseInt(sessionStorage.getItem(STORE_KEY) || '0', 10);
-if (savedScroll > 0) {
+if (savedScroll > 0 && varFilter === 0) {
   requestAnimationFrame(() => {
     lw.scrollTop = savedScroll;
-    selPin = Math.min(PINS.length-1, Math.round(savedScroll/ITEM_H));
+    selPin = Math.min(displayPins.length-1, Math.round(savedScroll/ITEM_H));
     lw.querySelectorAll('.wheel-item').forEach((el,ei) => el.classList.toggle('selected',ei===selPin));
     buildRightWheel(selPin);
+    updateDelta();
   });
-} else {
-  buildRightWheel(0);
-  updateDelta();
 }
 </script>
 <script>
@@ -326,37 +399,41 @@ document.getElementById('nav-menu').addEventListener('click', function(e){
   if (e.target === this) this.classList.remove('open');
 });
 </script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 <script>
-(function() {
-  if (!FB_CFG || !FB_CFG.apiKey || !FB_CFG.databaseURL) return;
-  try {
-    const _app = firebase.initializeApp(FB_CFG);
-    window._rtdb = firebase.database(_app);
-  } catch(e) { console.warn('Firebase init failed', e); }
-})();
-// RTDB path: dots in pk mangled to underscores (RTDB key requirement)
+// Firebase REST API — no SDK required, anonymous reads/writes via fetch()
+// Works regardless of network conditions or Firebase SDK availability.
+const _DB_BASE = (typeof FB_CFG !== 'undefined' && FB_CFG && FB_CFG.databaseURL)
+  ? FB_CFG.databaseURL.replace(/\/+$/, '')
+  : 'https://fins-and-pins-click-to-claim-default-rtdb.firebaseio.com';
+
 function _rtdbPath(pk) {
-  return "pin_pricing_tests/" + TEST_RUN_ID + "/" + APPROACH_ID + "/pins/" + pk.replace(/\./g, "_");
+  // Replace ALL non-alphanumeric chars (except _ and -) so RTDB key is always valid
+  return 'pin_pricing_tests/' + TEST_RUN_ID + '/' + APPROACH_ID + '/pins/'
+       + pk.replace(/[^A-Za-z0-9_-]/g, '_');
 }
 function _getUser() {
-  let u = localStorage.getItem("fpins_reviewer");
+  let u = localStorage.getItem('fpins_reviewer');
   if (!u) {
-    try { u = (window.prompt("Your name (saved for pricing records):") || "").trim().slice(0, 30); }
-    catch(e) { u = ""; }
-    if (u) localStorage.setItem("fpins_reviewer", u);
-    else u = "unknown";
+    try { u = (window.prompt('Your name (saved for pricing records):') || '').trim().slice(0, 30); }
+    catch(e) { u = ''; }
+    if (u) localStorage.setItem('fpins_reviewer', u);
+    else u = 'unknown';
   }
   return u;
 }
-// Write to RTDB (not Firestore — Firestore rejects 5-segment paths).
-// pin_key is stored as a value field so hydration can match by original key.
 function _fbWrite(pk, fields) {
-  if (!window._rtdb) return Promise.resolve();
-  return window._rtdb.ref(_rtdbPath(pk)).update(
-    Object.assign({pin_key: pk}, fields, {reviewed_by: _getUser()})
-  );
+  const url = _DB_BASE + '/' + _rtdbPath(pk) + '.json';
+  const body = JSON.stringify(Object.assign({ pin_key: pk }, fields, { reviewed_by: _getUser() }));
+  return fetch(url, { method: 'PATCH', body, headers: { 'Content-Type': 'application/json' } })
+    .catch(e => console.warn('Firebase write failed', e));
+}
+async function _fbReadAllPins() {
+  const url = _DB_BASE + '/pin_pricing_tests/' + TEST_RUN_ID + '/' + APPROACH_ID + '/pins.json';
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) { console.warn('Firebase read HTTP ' + resp.status); return {}; }
+    return (await resp.json()) || {};
+  } catch(e) { console.warn('Firebase read failed', e); return {}; }
 }
 </script>
 </body></html>

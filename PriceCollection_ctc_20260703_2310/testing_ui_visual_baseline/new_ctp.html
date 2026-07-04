@@ -83,9 +83,9 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
   </div>
   <div class="filter-bar" style="border-top:1px solid #1a1a1a">
     <span class="bar-label">Filter:</span>
-    <button class="fb filt-btn active" data-filter="all">All</button>
-    <button class="fb filt-btn" data-filter="nomatch">No Match</button>
-    <button class="fb filt-btn" data-filter="unrev">Unreviewed</button>
+    <button class="fb filt-btn" data-filter="all">All<span class="fb-cnt"></span></button>
+    <button class="fb filt-btn active" data-filter="nomatch">No Match<span class="fb-cnt"></span></button>
+    <button class="fb filt-btn" data-filter="unrev">Unreviewed<span class="fb-cnt"></span></button>
     <button class="fb filt-btn" data-filter="hidden">Hidden</button>
     <button class="fb filt-btn" data-filter="wdi">WDI</button>
     <button class="fb filt-btn" data-filter="dec">DEC</button>
@@ -294,8 +294,8 @@ document.getElementById('ebay-btn').addEventListener('click', () => {
 });
 
 // Independent sort + filter state
-let curSort   = 'desc';   // 'desc' | 'asc'
-let curFilter = 'all';    // 'all' | 'nomatch' | 'unrev' | category key
+let curSort   = 'desc';    // 'desc' | 'asc'
+let curFilter = 'nomatch'; // 'all' | 'nomatch' | 'unrev' | category key
 
 function applyFilterSort() {
   const SKIP = ['match','no_match','auto_match','priced'];
@@ -307,6 +307,22 @@ function applyFilterSort() {
   else                   pins.sort((a,b) => b.price - a.price);
   displayPins = pins;
   buildLeftWheel();
+  updateFilterCounts();
+}
+
+function updateFilterCounts() {
+  const SKIP = ['match','no_match','auto_match','priced'];
+  document.querySelectorAll('.filt-btn').forEach(btn => {
+    const span = btn.querySelector('.fb-cnt');
+    if (!span) return;
+    const f = btn.dataset.filter;
+    let cnt;
+    if (f === 'all')          cnt = PINS.length;
+    else if (f === 'nomatch') cnt = PINS.filter(p => p.ms === 'no_match').length;
+    else if (f === 'unrev')   cnt = PINS.filter(p => !SKIP.includes(p.ms)).length;
+    else                      cnt = null;
+    if (cnt != null) span.textContent = ' (' + cnt + ')';
+  });
 }
 
 document.querySelectorAll('.sort-btn').forEach(btn => {
@@ -352,78 +368,81 @@ document.getElementById('nav-menu').addEventListener('click', function(e){
   if (e.target === this) this.classList.remove('open');
 });
 </script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 <script>
-(function() {
-  if (!FB_CFG || !FB_CFG.apiKey || !FB_CFG.databaseURL) return;
-  try {
-    const _app = firebase.initializeApp(FB_CFG);
-    window._rtdb = firebase.database(_app);
-  } catch(e) { console.warn('Firebase init failed', e); }
-})();
-// RTDB path: dots in pk mangled to underscores (RTDB key requirement)
+// Firebase REST API — no SDK required, anonymous reads/writes via fetch()
+// Works regardless of network conditions or Firebase SDK availability.
+const _DB_BASE = (typeof FB_CFG !== 'undefined' && FB_CFG && FB_CFG.databaseURL)
+  ? FB_CFG.databaseURL.replace(/\/+$/, '')
+  : 'https://fins-and-pins-click-to-claim-default-rtdb.firebaseio.com';
+
 function _rtdbPath(pk) {
-  return "pin_pricing_tests/" + TEST_RUN_ID + "/" + APPROACH_ID + "/pins/" + pk.replace(/\./g, "_");
+  // Replace ALL non-alphanumeric chars (except _ and -) so RTDB key is always valid
+  return 'pin_pricing_tests/' + TEST_RUN_ID + '/' + APPROACH_ID + '/pins/'
+       + pk.replace(/[^A-Za-z0-9_-]/g, '_');
 }
 function _getUser() {
-  let u = localStorage.getItem("fpins_reviewer");
+  let u = localStorage.getItem('fpins_reviewer');
   if (!u) {
-    try { u = (window.prompt("Your name (saved for pricing records):") || "").trim().slice(0, 30); }
-    catch(e) { u = ""; }
-    if (u) localStorage.setItem("fpins_reviewer", u);
-    else u = "unknown";
+    try { u = (window.prompt('Your name (saved for pricing records):') || '').trim().slice(0, 30); }
+    catch(e) { u = ''; }
+    if (u) localStorage.setItem('fpins_reviewer', u);
+    else u = 'unknown';
   }
   return u;
 }
-// Write to RTDB (not Firestore — Firestore rejects 5-segment paths).
-// pin_key is stored as a value field so hydration can match by original key.
 function _fbWrite(pk, fields) {
-  if (!window._rtdb) return Promise.resolve();
-  return window._rtdb.ref(_rtdbPath(pk)).update(
-    Object.assign({pin_key: pk}, fields, {reviewed_by: _getUser()})
-  );
+  const url = _DB_BASE + '/' + _rtdbPath(pk) + '.json';
+  const body = JSON.stringify(Object.assign({ pin_key: pk }, fields, { reviewed_by: _getUser() }));
+  return fetch(url, { method: 'PATCH', body, headers: { 'Content-Type': 'application/json' } })
+    .catch(e => console.warn('Firebase write failed', e));
+}
+async function _fbReadAllPins() {
+  const url = _DB_BASE + '/pin_pricing_tests/' + TEST_RUN_ID + '/' + APPROACH_ID + '/pins.json';
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) { console.warn('Firebase read HTTP ' + resp.status); return {}; }
+    return (await resp.json()) || {};
+  } catch(e) { console.warn('Firebase read failed', e); return {}; }
 }
 </script>
 <script>
-// Hydrate CTP v2 from RTDB: update prices, match statuses, and confirmed slots
+// Hydrate CTP v2 from Firebase REST API: update prices, match statuses, and confirmed slots
 (async function hydrateCTP() {
-  if (!window._rtdb) return;
-  try {
-    const fbPath = 'pin_pricing_tests/' + TEST_RUN_ID + '/' + APPROACH_ID + '/pins';
-    const snap = await window._rtdb.ref(fbPath).once('value');
-    const fbPins = snap.val() || {};
-    if (!Object.keys(fbPins).length) return;
-    let updated = 0;
-    for (const fbPin of Object.values(fbPins)) {
-      const pk = fbPin.pin_key;
-      if (!pk) continue;
-      const pi = PINS.findIndex(p => p.pk === pk);
-      if (pi === -1) continue;
-      if (fbPin.display_price != null) { PINS[pi].price = fbPin.display_price; updated++; }
-      if (fbPin.match_status)           PINS[pi].ms = fbPin.match_status;
-      if (fbPin.selected_candidate_idx != null) PINS[pi]._fbCandIdx = fbPin.selected_candidate_idx;
+  const fbPins = await _fbReadAllPins();
+  const keys = Object.keys(fbPins);
+  if (!keys.length) {
+    console.log('CTP: no Firebase data found for this run — ' + TEST_RUN_ID);
+    updateFilterCounts();
+    return;
+  }
+  let updated = 0;
+  for (const fbPin of Object.values(fbPins)) {
+    const pk = fbPin.pin_key;
+    if (!pk) continue;
+    const pi = PINS.findIndex(p => p.pk === pk);
+    if (pi === -1) continue;
+    if (fbPin.display_price != null) { PINS[pi].price = fbPin.display_price; updated++; }
+    if (fbPin.match_status)           PINS[pi].ms = fbPin.match_status;
+    if (fbPin.selected_candidate_idx != null) PINS[pi]._fbCandIdx = fbPin.selected_candidate_idx;
+  }
+  console.log('CTP: hydrated ' + updated + ' pins from Firebase (' + keys.length + ' entries found)');
+  // Re-render with updated prices/statuses
+  const urlPk = new URLSearchParams(window.location.search).get('pin');
+  applyFilterSort();  // also calls updateFilterCounts()
+  // Re-run ?pin= navigation if present (buildLeftWheel resets scroll)
+  if (urlPk) {
+    const i = displayPins.findIndex(p => p.pk === urlPk);
+    if (i >= 0) {
+      requestAnimationFrame(() => {
+        lw.scrollTop = i * ITEM_H;
+        selPin = i;
+        lw.querySelectorAll('.wheel-item').forEach((el,ei) => el.classList.toggle('selected', ei===i));
+        buildRightWheel(i);
+        const p = displayPins[i];
+        if (p) document.getElementById('ebay-q').value = p.title.slice(0,60);
+      });
     }
-    if (updated === 0) return;
-    console.log('CTP: hydrated ' + updated + ' pins from Firebase');
-    // Re-render with updated prices/statuses
-    const urlPk = new URLSearchParams(window.location.search).get('pin');
-    applyFilterSort();
-    // Re-run ?pin= navigation if present (buildLeftWheel resets scroll)
-    if (urlPk) {
-      const i = displayPins.findIndex(p => p.pk === urlPk);
-      if (i >= 0) {
-        requestAnimationFrame(() => {
-          lw.scrollTop = i * ITEM_H;
-          selPin = i;
-          lw.querySelectorAll('.wheel-item').forEach((el,ei) => el.classList.toggle('selected', ei===i));
-          buildRightWheel(i);
-          const p = displayPins[i];
-          if (p) document.getElementById('ebay-q').value = p.title.slice(0,60);
-        });
-      }
-    }
-  } catch(e) { console.warn('CTP Firebase hydration failed', e); }
+  }
 })();
 </script>
 
