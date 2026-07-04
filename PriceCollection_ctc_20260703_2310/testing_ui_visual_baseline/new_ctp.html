@@ -82,9 +82,12 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
 /* ── Below-fold sections ── */
 #ebay-section,#manual-section{padding:10px 6px 8px;border-top:1px solid #222;margin-top:4px}
 .ebay-lbl,#manual-section label{font-size:10px;color:#555;margin-bottom:4px;display:block}
-#ebay-form input{width:100%;box-sizing:border-box;padding:8px 10px;
+#ebay-form{display:flex;gap:6px}
+#ebay-form input{flex:1;box-sizing:border-box;padding:8px 10px;
   border-radius:6px;border:1px solid #333;background:#1a1a1a;
   color:#fff;font-size:14px}
+#ebay-btn{background:#333;border:none;color:#eee;border-radius:6px;
+  padding:7px 12px;font-size:13px;cursor:pointer;white-space:nowrap}
 #manual-row{display:flex;gap:6px}
 #manual-price{flex:1;background:#222;border:1px solid #333;color:#eee;
   border-radius:6px;padding:7px 10px;font-size:14px}
@@ -124,7 +127,8 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
   <div id="ebay-section">
     <div class="ebay-lbl">eBay search</div>
     <form id="ebay-form">
-      <input id="ebay-input" type="search" placeholder="Search eBay...">
+      <input id="ebay-input" type="search" placeholder="Search eBay sold listings...">
+      <button type="submit" id="ebay-btn">Search</button>
     </form>
   </div>
   <div id="manual-section">
@@ -205,7 +209,7 @@ function renderTiles(p) {
   const isConf = confirmed[p.pk] != null;
   const coi = chosenIdx(p);
   const chosenCand = candsWithIdx[coi] || candsWithIdx[0];
-  const chosenPrice = isNaP ? 0 : (chosenCand ? (chosenCand.p || p.price) : p.price);
+  const chosenPrice = isNaP ? 0 : (p._manualPrice != null ? p._manualPrice : (chosenCand ? (chosenCand.p || p.price) : p.price));
   const positivePrices = candsWithIdx.filter(c => c.p > 0).map(c => c.p);
   const cheapest = positivePrices.length ? Math.min(...positivePrices) : chosenPrice;
   const pinDelta = isNaP ? 0 : Math.max(0, chosenPrice - cheapest);
@@ -355,6 +359,7 @@ document.getElementById('manual-btn').addEventListener('click', () => {
   if (isNaN(v) || v <= 0) return;
   confirmed[p.pk] = confirmed[p.pk] != null ? confirmed[p.pk] : 0;
   p.price = v;
+  p._manualPrice = v;  // used by renderTiles to show manual override
   _fbWrite(p.pk, { display_price: v, match_status: 'priced', priced_at: new Date().toISOString() });
   document.getElementById('manual-price').value = '';
   renderPin(selPin);
