@@ -360,7 +360,9 @@ function selectAndAdvance(p, origIdx) {
     display_price: newPrice,
     slot_reviewed_at: new Date().toISOString()
   });
+  const prevSel = selPin;
   navigate(1);
+  if (selPin === prevSel) renderPin(selPin); // last pin: re-render to show chosen state
 }
 
 function markNotAPin(p) {
@@ -392,7 +394,23 @@ document.getElementById('back-btn').addEventListener('click', () => {
   lastUndo = null;
   navigate(-1);
 });
-document.getElementById('next-btn').addEventListener('click', () => navigate(1));
+document.getElementById('next-btn').addEventListener('click', () => {
+  const p = displayPins[selPin];
+  // Confirm current slot if not already explicitly reviewed
+  if (p && confirmed[p.pk] == null) {
+    const coi = chosenIdx(p);
+    const cand = (p.cands||[])[coi];
+    const price = cand ? (cand.p || p.slot0_p) : p.slot0_p;
+    confirmed[p.pk] = coi;
+    p.price = price;
+    _fbWrite(p.pk, {
+      selected_candidate_idx: coi,
+      display_price: price,
+      slot_reviewed_at: new Date().toISOString()
+    });
+  }
+  navigate(1);
+});
 document.getElementById('nap-btn').addEventListener('click', () => {
   const p = displayPins[selPin]; if (p) markNotAPin(p);
 });
