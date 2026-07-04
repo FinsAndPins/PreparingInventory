@@ -68,6 +68,8 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
   border-radius:6px;padding:7px 10px;font-size:14px}
 #manual-btn,#ebay-btn{background:#333;border:none;color:#eee;border-radius:6px;
   padding:7px 12px;font-size:13px;cursor:pointer}
+#prog-wrap{height:4px;background:#2a2a2a;flex-shrink:0}
+#prog-fill{height:100%;background:#2a6eff;transition:width .25s;width:0%}
 </style>
 </head><body>
 <div id="hdr">
@@ -101,6 +103,7 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
   <a href="contact_sheet.html">Contact Sheet</a>
   <a href="index.html">Overlay</a>
 </div>
+<div id="prog-wrap"><div id="prog-fill"></div></div>
 
 <div id="wheels">
   <div id="left-col">
@@ -426,6 +429,15 @@ async function _fbReadAllPins() {
     if (fbPin.selected_candidate_idx != null) PINS[pi]._fbCandIdx = fbPin.selected_candidate_idx;
   }
   console.log('CTP: hydrated ' + updated + ' pins from Firebase (' + keys.length + ' entries found)');
+  // Update progress bar: reviewed = pins with a real match_status set
+  const SKIP = ['match','no_match','auto_match','priced','not_a_pin'];
+  const reviewed = PINS.filter(p => SKIP.includes(p.ms)).length;
+  const _fill = document.getElementById('prog-fill');
+  if (_fill) {
+    const _pct = PINS.length ? Math.round(reviewed / PINS.length * 100) : 0;
+    _fill.style.width = _pct+'%';
+    _fill.style.background = _pct===100 ? '#1a5e1a' : '#2a6eff';
+  }
   // Re-render with updated prices/statuses
   const urlPk = new URLSearchParams(window.location.search).get('pin');
   applyFilterSort();  // also calls updateFilterCounts()

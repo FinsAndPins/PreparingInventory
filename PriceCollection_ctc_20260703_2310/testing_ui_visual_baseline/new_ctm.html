@@ -65,6 +65,8 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden;
 #btn-notpin {background:#5a3a00;color:#ffb84d;width:80px;flex-shrink:0}
 #btn-back   {background:#1a1a3a;color:#8888ff;flex:1}
 #btn-skip   {background:#2a2a2a;color:#aaa;flex:1}
+#prog-wrap{height:4px;background:#2a2a2a;flex-shrink:0}
+#prog-fill{height:100%;background:#2a6eff;transition:width .25s;width:0%}
 </style>
 </head><body>
 <div id="hdr">
@@ -82,6 +84,7 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden;
   <a href="contact_sheet.html">Contact Sheet</a>
   <a href="index.html">Overlay</a>
 </div>
+<div id="prog-wrap"><div id="prog-fill"></div></div>
 
 <div id="photos">
   <div id="crop-wrap">
@@ -118,7 +121,7 @@ const FB_CFG   = {"apiKey": "AIzaSyB5HoTCon9uIFJqnF506tB_jORAG1HvI7o", "authDoma
 const TEST_RUN_ID = "test_PriceCollection_ctc_20260703_2310__build_41560_visual_baseline";
 const APPROACH_ID = "visual_baseline";
 const RUN_NAME    = "PriceCollection_ctc_20260703_2310";
-const SKIP_MS  = ["no_match", "not_a_pin", "auto_match", "match"];
+const SKIP_MS  = ["not_a_pin", "auto_match", "match", "no_match"];
 
 const STORE_KEY = 'ctm_idx_' + RUN_NAME;
 const queue = PINS.filter(p => !SKIP_MS.includes(p.ms));
@@ -143,6 +146,9 @@ function showPin(i) {
   thumbEl.src = p.thumb || '';
   badgeEl.textContent = p.price > 0 ? '$' + Math.round(p.price) : '';
   progEl.textContent = (i+1) + ' / ' + queue.length;
+  const _pct = queue.length > 0 ? Math.round(Math.min(i, queue.length) / queue.length * 100) : 100;
+  const _fill = document.getElementById('prog-fill');
+  if (_fill) { _fill.style.width = _pct+'%'; _fill.style.background = _pct===100 ? '#1a5e1a' : '#2a6eff'; }
 }
 
 function record(pk, status) {

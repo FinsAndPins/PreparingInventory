@@ -86,6 +86,9 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
 #ebay-form input{width:100%;box-sizing:border-box;padding:8px 10px;
   border-radius:6px;border:1px solid #333;background:#1a1a1a;
   color:#fff;font-size:14px}
+/* ── Progress bar ── */
+#prog-wrap{height:4px;background:#2a2a2a;flex-shrink:0}
+#prog-fill{height:100%;background:#2a6eff;transition:width .25s;width:0%}
 </style>
 </head><body>
 <div id="hdr">
@@ -103,6 +106,7 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
   <a href="contact_sheet.html">Contact Sheet</a>
   <a href="index.html">Overlay</a>
 </div>
+<div id="prog-wrap"><div id="prog-fill"></div></div>
 
 <div id="pin-section">
   <div id="pin-img-wrap"><img id="pin-img" src="" alt=""></div>
@@ -186,6 +190,9 @@ function chosenIdx(p) {
 function renderPin(pi) {
   const p = displayPins[pi]; if (!p) return;
   document.getElementById('pd-idx').textContent = (pi+1) + ' / ' + displayPins.length;
+  const _pct = displayPins.length > 1 ? Math.round(pi / (displayPins.length-1) * 100) : 100;
+  const _fill = document.getElementById('prog-fill');
+  if (_fill) { _fill.style.width = _pct+'%'; _fill.style.background = _pct===100 ? '#1a5e1a' : '#2a6eff'; }
   document.getElementById('back-btn').disabled = (pi === 0);
   const isLast = pi === displayPins.length - 1;
   const nextBtn = document.getElementById('next-btn');
