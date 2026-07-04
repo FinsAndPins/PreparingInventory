@@ -15,59 +15,82 @@ a.back-btn{color:#4a9eff;font-size:14px;text-decoration:none;padding:4px 0}
 /* Hamburger */
 #ham-btn{background:none;border:none;color:#eee;font-size:22px;
   padding:6px 4px;cursor:pointer;line-height:1;margin-left:4px}
-#nav-menu{display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:500;
-  background:rgba(0,0,0,.75)}
-#nav-menu.open{display:block}
+#nav-menu{display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;
+  background:rgba(0,0,0,.82);-webkit-transform:translateZ(0);transform:translateZ(0)}
+#nav-menu.open{display:flex;flex-direction:column}
 #nav-menu a{display:block;background:#222;border-bottom:1px solid #2a2a2a;
   padding:18px 22px;color:#eee;text-decoration:none;font-size:17px}
 #nav-menu a.current{color:#4a9eff;font-weight:600}
 #nav-menu a:active{background:#333}
 
 body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
+/* ── Compact pin meta row (in header) ── */
+#pin-meta{display:flex;align-items:center;gap:8px;padding:3px 10px 5px;
+  background:#111;border-bottom:1px solid #222;flex-shrink:0}
+.pm-title{flex:1;font-size:11px;color:#bbb;overflow:hidden;
+  white-space:nowrap;text-overflow:ellipsis}
+.pm-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.pm-idx{font-size:10px;color:#555;white-space:nowrap}
+.pd-undo{font-size:11px;color:#4a9eff;background:none;border:none;
+  cursor:pointer;padding:0;display:none;text-decoration:underline}
+/* ── Filter bar ── */
 .filter-bar{display:flex;gap:5px;padding:5px 10px;overflow-x:auto;
   -webkit-overflow-scrolling:touch;scrollbar-width:none;border-bottom:1px solid #222;
   flex-shrink:0}
 .filter-bar::-webkit-scrollbar{display:none}
-.fb{flex-shrink:0;padding:5px 9px;border-radius:14px;font-size:11px;
+.fb{flex-shrink:0;padding:4px 9px;border-radius:14px;font-size:11px;
   border:1px solid #3a3a3a;background:#222;color:#888;cursor:pointer}
 .fb.active{background:#1e4fa0;color:#fff;border-color:#2a5298}
 .bar-label{flex-shrink:0;font-size:10px;color:#555;align-self:center;padding-right:2px}
-#wheels{flex:1;display:flex;overflow:hidden;min-height:0}
-#left-col{width:38%;display:flex;flex-direction:column;border-right:1px solid #2a2a2a}
-#mid-col{width:16%;display:flex;flex-direction:column;align-items:center;
-  justify-content:center;gap:4px;border-right:1px solid #2a2a2a}
-#right-col{flex:1;display:flex;flex-direction:column}
-.col-label{font-size:10px;color:#555;text-align:center;padding:3px 0;
-  border-bottom:1px solid #222;flex-shrink:0}
-.wheel{flex:1;overflow-y:scroll;scroll-snap-type:y mandatory;
-  -webkit-overflow-scrolling:touch;overscroll-behavior:contain}
-.wheel::-webkit-scrollbar{display:none}
-.wheel-item{height:110px;scroll-snap-align:start;position:relative;
-  border-bottom:1px solid #1a1a1a;display:flex;align-items:center;justify-content:center}
-.wheel-item.selected{background:#1a2a3a;border-left:3px solid #4a9eff}
-.wheel-item img{width:100%;height:100%;object-fit:contain;background:#1a1a1a}
-.wi-price{position:absolute;top:3px;right:3px;background:rgba(0,0,0,.85);
-  color:#fff;font-size:10px;font-weight:700;padding:1px 4px;border-radius:3px}
-.wi-slot{position:absolute;top:3px;left:3px;background:rgba(0,0,0,.7);
-  color:#888;font-size:9px;padding:1px 3px;border-radius:2px}
-.wi-chosen{position:absolute;bottom:3px;left:3px;background:#1e4fa0;
-  color:#fff;font-size:9px;padding:1px 4px;border-radius:2px;font-weight:700}
-#mid-price{font-size:18px;font-weight:800;color:#fff;text-align:center}
-#mid-title{font-size:9px;color:#666;text-align:center;padding:0 2px;
-  overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
-#mid-count{font-size:10px;color:#555;text-align:center}
-#use-btn{background:#1a6b1a;color:#6eff6e;border:none;border-radius:6px;
-  font-size:12px;font-weight:700;padding:7px 4px;cursor:pointer;width:90%;
-  margin:4px auto;flex-shrink:0;text-align:center}
-#lower{flex-shrink:0;border-top:1px solid #2a2a2a;overflow-y:auto;
-  max-height:200px;padding:10px 12px;display:flex;flex-direction:column;gap:10px}
-#manual-section label,#ebay-section label{font-size:12px;color:#888;
-  display:block;margin-bottom:4px}
-#manual-row,#ebay-row{display:flex;gap:6px}
-#manual-price,#ebay-q{flex:1;background:#222;border:1px solid #333;color:#eee;
+/* ── Tile grid ── */
+#tile-area{flex:1;overflow-y:auto;min-height:0;padding:6px;
+  -webkit-overflow-scrolling:touch}
+#tile-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.tile{position:relative;border-radius:6px;overflow:hidden;
+  background:#1a1a1a;border:2px solid transparent;cursor:pointer;
+  display:flex;flex-direction:column}
+.tile img{width:100%;aspect-ratio:1;object-fit:contain;background:#1a1a1a;flex-shrink:0}
+.tile-pbar{background:rgba(0,0,0,.9);padding:3px 5px;
+  display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.tile-price{font-size:11px;font-weight:700;color:#fff}
+.tile-delta{font-size:10px;color:#6eff6e}
+.tile-delta.worse{color:#ff6e6e}.tile-delta.same{color:#888}
+.tile-sn{position:absolute;top:3px;left:3px;background:rgba(0,0,0,.65);
+  color:#888;font-size:9px;padding:1px 3px;border-radius:2px;z-index:1}
+.tile.chosen{border-color:#f0c040}
+.tile.chosen .tile-sn{background:rgba(240,192,64,.85);color:#000;font-weight:700}
+.tile.not-a-pin{border-color:#555;opacity:.5}
+.tile-star{position:absolute;top:3px;right:3px;font-size:13px;line-height:1;z-index:1}
+.tile-chk{position:absolute;bottom:24px;right:4px;color:#6eff6e;
+  font-size:13px;display:none;z-index:1}
+.tile.confirmed-sel .tile-chk{display:block}
+/* ── My Pin tile ── */
+.pin-tile{border:2px solid #1a3a1a;border-left:4px solid #6eff6e;cursor:default}
+.pin-tile .tile-sn{background:rgba(60,180,60,.85);color:#000;font-weight:700}
+.tile-mypin{position:absolute;bottom:24px;left:3px;
+  background:rgba(20,70,20,.9);color:#6eff6e;font-size:9px;font-weight:700;
+  padding:1px 4px;border-radius:2px;z-index:1}
+/* ── Bottom nav ── */
+#bottom-nav{flex-shrink:0;background:#111;border-top:1px solid #222;padding:5px 8px 8px}
+.nav-row{display:flex;gap:6px;margin-top:5px}
+.nav-btn{height:44px;border:none;border-radius:8px;font-size:15px;
+  font-weight:700;cursor:pointer;transition:opacity .15s}
+.nav-btn:disabled{opacity:.35;cursor:default}
+#back-btn{flex:4;background:#2a2a2a;color:#aaa}
+#nap-btn{flex:1;background:#3a1010;color:#cc4444;font-size:12px;border-radius:8px}
+#next-btn{flex:4;background:#1e4fa0;color:#fff}
+/* ── Below-fold sections ── */
+#ebay-section,#manual-section{padding:10px 6px 8px;border-top:1px solid #222;margin-top:4px}
+.ebay-lbl,#manual-section label{font-size:10px;color:#555;margin-bottom:4px;display:block}
+#ebay-form input{width:100%;box-sizing:border-box;padding:8px 10px;
+  border-radius:6px;border:1px solid #333;background:#1a1a1a;
+  color:#fff;font-size:14px}
+#manual-row{display:flex;gap:6px}
+#manual-price{flex:1;background:#222;border:1px solid #333;color:#eee;
   border-radius:6px;padding:7px 10px;font-size:14px}
-#manual-btn,#ebay-btn{background:#333;border:none;color:#eee;border-radius:6px;
+#manual-btn{background:#333;border:none;color:#eee;border-radius:6px;
   padding:7px 12px;font-size:13px;cursor:pointer}
+/* ── Progress bar ── */
 #prog-wrap{height:4px;background:#2a2a2a;flex-shrink:0}
 #prog-fill{height:100%;background:#2a6eff;transition:width .25s;width:0%}
 </style>
@@ -75,20 +98,21 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
 <div id="hdr">
   <div class="hdr-row">
     <div class="hdr-title">ClickToPrice v2</div>
-    <div class="hdr-sub" id="pin-counter"></div>
+    <div class="hdr-sub" id="ctp-count"></div>
     <button id="ham-btn">&#9776;</button>
   </div>
-  <div class="filter-bar">
-    <span class="bar-label">Sort:</span>
-    <button class="fb sort-btn active" data-sort="desc">$ High→Low</button>
-    <button class="fb sort-btn" data-sort="asc">$ Low→High</button>
+  <div id="pin-meta">
+    <div class="pm-title" id="pd-title">—</div>
+    <div class="pm-right">
+      <span class="pm-idx" id="pd-idx"></span>
+      <button class="pd-undo" id="undo-btn">&#8617; Undo</button>
+    </div>
   </div>
-  <div class="filter-bar" style="border-top:1px solid #1a1a1a">
+  <div class="filter-bar">
     <span class="bar-label">Filter:</span>
-    <button class="fb filt-btn" data-filter="all">All<span class="fb-cnt"></span></button>
     <button class="fb filt-btn active" data-filter="nomatch">No Match<span class="fb-cnt"></span></button>
     <button class="fb filt-btn" data-filter="unrev">Unreviewed<span class="fb-cnt"></span></button>
-    <button class="fb filt-btn" data-filter="hidden">Hidden</button>
+    <button class="fb filt-btn" data-filter="all">All<span class="fb-cnt"></span></button>
     <button class="fb filt-btn" data-filter="wdi">WDI</button>
     <button class="fb filt-btn" data-filter="dec">DEC</button>
     <button class="fb filt-btn" data-filter="dssh">DSSH</button>
@@ -105,24 +129,14 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
 </div>
 <div id="prog-wrap"><div id="prog-fill"></div></div>
 
-<div id="wheels">
-  <div id="left-col">
-    <div class="col-label">PIN</div>
-    <div class="wheel" id="left-wheel"></div>
+<div id="tile-area">
+  <div id="tile-grid"></div>
+  <div id="ebay-section">
+    <div class="ebay-lbl">eBay search</div>
+    <form id="ebay-form">
+      <input id="ebay-input" type="search" placeholder="Search eBay...">
+    </form>
   </div>
-  <div id="mid-col">
-    <div id="mid-count"></div>
-    <div id="mid-price"></div>
-    <div id="mid-title"></div>
-    <button id="use-btn">Use This</button>
-  </div>
-  <div id="right-col">
-    <div class="col-label">eBay LISTINGS</div>
-    <div class="wheel" id="right-wheel"></div>
-  </div>
-</div>
-
-<div id="lower">
   <div id="manual-section">
     <label>Manual price override</label>
     <div id="manual-row">
@@ -130,12 +144,12 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
       <button id="manual-btn">Set Price</button>
     </div>
   </div>
-  <div id="ebay-section">
-    <label>Search eBay sold</label>
-    <div id="ebay-row">
-      <input id="ebay-q" type="search" placeholder="Search term…">
-      <button id="ebay-btn">Search</button>
-    </div>
+</div>
+<div id="bottom-nav">
+  <div class="nav-row">
+    <button class="nav-btn" id="back-btn">← Back</button>
+    <button class="nav-btn" id="nap-btn">NaP</button>
+    <button class="nav-btn" id="next-btn">Next →</button>
   </div>
 </div>
 
@@ -147,174 +161,222 @@ const APPROACH_ID = "visual_baseline";
 const RUN_NAME    = "PriceCollection_ctc_20260703_2310";
 const GRAY = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjAiIGhlaWdodD0iMTIwIj48cmVjdCB3aWR0aD0iMTIwIiBoZWlnaHQ9IjEyMCIgZmlsbD0iIzIyMiIvPjx0ZXh0IHg9IjYwIiB5PSI2OCIgZm9udC1zaXplPSIzNiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzU1NSI+PzwvdGV4dD48L3N2Zz4=';
 
-const ITEM_H = 110;
-let displayPins = [...PINS];
-let selPin = 0;
-let selCand = 0;
+const STORE_KEY = 'ctp_v2_' + RUN_NAME;
+document.getElementById('ctp-count').textContent = PINS.length + ' pins';
 
-const lw = document.getElementById('left-wheel');
-const rw = document.getElementById('right-wheel');
-const midPrice = document.getElementById('mid-price');
-const midTitle = document.getElementById('mid-title');
-const midCount = document.getElementById('mid-count');
-const counter  = document.getElementById('pin-counter');
-const useBtn   = document.getElementById('use-btn');
+let selPin = 0;
+let confirmed = {};   // pk -> origIdx  (or -1 for not-a-pin)
+let lastUndo  = null;
+let curFilter = 'nomatch';
+let displayPins = [];
 
 function fmt(p) { return (p != null && !isNaN(p) && p >= 0) ? '$' + Math.round(p) : '$?'; }
 
-function buildLeftWheel() {
-  lw.innerHTML = '';
-  displayPins.forEach((p, i) => {
-    const el = document.createElement('div');
-    el.className = 'wheel-item' + (i === 0 ? ' selected' : '');
-    el.dataset.idx = i;
-    const img = document.createElement('img');
-    img.src = p.b64 || ('../crops/' + encodeURIComponent(p.crop));
-    if (!p.b64) img.onerror = function(){ this.src=GRAY; this.onerror=null; };
-    img.loading = 'lazy';
-    const pr = document.createElement('div');
-    pr.className = 'wi-price';
-    pr.textContent = fmt(p.price);
-    el.append(img, pr);
-    el.addEventListener('click', () => lw.scrollTo({top: i*ITEM_H, behavior:'smooth'}));
-    lw.appendChild(el);
-  });
-  lw.scrollTop = 0; selPin = 0;
-  buildRightWheel(0);
-  counter.textContent = displayPins.length + ' pins';
-  if (displayPins[0]) document.getElementById('ebay-q').value = displayPins[0].title.slice(0,60);
+function chosenIdx(p) {
+  if (confirmed[p.pk] != null && confirmed[p.pk] >= 0) return confirmed[p.pk];
+  return (p._fbCandIdx != null ? p._fbCandIdx : 0);
 }
 
-function buildRightWheel(pi) {
-  rw.innerHTML = '';
+function renderPin(pi) {
   const p = displayPins[pi]; if (!p) return;
-  // Sort candidates cheapest→most-expensive; keep original slot index for display
-  const sorted = (p.cands || []).map((c, origIdx) => ({...c, origIdx}))
-    .sort((a, b) => (a.p || 0) - (b.p || 0));
-  p._sorted = sorted;
-  // Pre-select Firebase-confirmed slot if available, else slot 0 (auto suggestion)
-  const usedOrigIdx = p._fbCandIdx != null ? p._fbCandIdx : null;
-  const targetOrigIdx = usedOrigIdx != null ? usedOrigIdx : 0;
-  const initSi = Math.max(0, sorted.findIndex(c => c.origIdx === targetOrigIdx));
-  sorted.forEach((c, si) => {
-    const isUsed = usedOrigIdx != null && c.origIdx === usedOrigIdx;
-    const isAuto = c.origIdx === 0;
-    const el = document.createElement('div');
-    el.className = 'wheel-item' + (si === initSi ? ' selected' : '');
+  document.getElementById('pd-idx').textContent = (pi+1) + ' / ' + displayPins.length;
+  const _pct = displayPins.length > 1 ? Math.round(pi / (displayPins.length-1) * 100) : 100;
+  const _fill = document.getElementById('prog-fill');
+  if (_fill) { _fill.style.width = _pct+'%'; _fill.style.background = _pct===100 ? '#1a5e1a' : '#2a6eff'; }
+  document.getElementById('back-btn').disabled = (pi === 0);
+  const isLast = pi === displayPins.length - 1;
+  const nextBtn = document.getElementById('next-btn');
+  nextBtn.textContent = isLast ? 'Done ✓' : 'Next →';
+  nextBtn.style.background = isLast ? '#1a5e1a' : '#1e4fa0';
+  document.getElementById('pd-title').textContent = p.title || p.pk;
+  document.getElementById('undo-btn').style.display =
+    (lastUndo && lastUndo.pk === p.pk) ? 'inline' : 'none';
+  const ei = document.getElementById('ebay-input');
+  if (ei && !ei.dataset.edited) ei.value = p.title || '';
+  renderTiles(p);
+  document.getElementById('tile-area').scrollTop = 0;
+}
+
+function renderTiles(p) {
+  const grid = document.getElementById('tile-grid');
+  grid.innerHTML = '';
+  const candsWithIdx = (p.cands||[]).map((c, i) => ({...c, origIdx: i}));
+  const isNaP = confirmed[p.pk] === -1;
+  const isConf = confirmed[p.pk] != null;
+  const coi = chosenIdx(p);
+  const chosenCand = candsWithIdx[coi] || candsWithIdx[0];
+  const chosenPrice = isNaP ? 0 : (chosenCand ? (chosenCand.p || p.price) : p.price);
+  const positivePrices = candsWithIdx.filter(c => c.p > 0).map(c => c.p);
+  const cheapest = positivePrices.length ? Math.min(...positivePrices) : chosenPrice;
+  const pinDelta = isNaP ? 0 : Math.max(0, chosenPrice - cheapest);
+
+  // My Pin tile (first, green left bar)
+  const pinTile = document.createElement('div');
+  pinTile.className = 'tile pin-tile';
+  const pinImg = document.createElement('img');
+  pinImg.src = p.b64 || ('../crops/' + encodeURIComponent(p.crop));
+  if (!p.b64) { pinImg.onerror = () => { pinImg.src = GRAY; pinImg.onerror = null; }; }
+  const pinPbar = document.createElement('div');
+  pinPbar.className = 'tile-pbar';
+  const pinPr = document.createElement('span');
+  pinPr.className = 'tile-price';
+  pinPr.textContent = isNaP ? 'NaP' : fmt(chosenPrice);
+  const pinDt = document.createElement('span');
+  pinDt.className = 'tile-delta';
+  pinDt.textContent = isNaP ? '✖' : (pinDelta >= 0.5 ? '−$'+Math.round(pinDelta) : '✓ best');
+  pinPbar.append(pinPr, pinDt);
+  const pinSn = document.createElement('div');
+  pinSn.className = 'tile-sn'; pinSn.textContent = 'S'+coi;
+  const pinMypin = document.createElement('div');
+  pinMypin.className = 'tile-mypin'; pinMypin.textContent = 'My pin';
+  pinTile.append(pinImg, pinPbar, pinSn, pinMypin);
+  grid.appendChild(pinTile);
+
+  if (!candsWithIdx.length) return;
+
+  // eBay candidate tiles (ascending price)
+  const sorted = candsWithIdx.slice().sort((a,b) => (a.p||0)-(b.p||0));
+  sorted.forEach(c => {
+    const isChosen = !isNaP && c.origIdx === coi;
+    const dSav = Math.round(chosenPrice - (c.p||0));
+    const tile = document.createElement('div');
+    tile.className = 'tile'
+      + (isChosen ? ' chosen' : '')
+      + (isChosen && isConf ? ' confirmed-sel' : '')
+      + (isNaP ? ' not-a-pin' : '');
     const img = document.createElement('img');
-    img.src = c.thumb || '';
-    img.loading = 'lazy';
+    img.src = c.thumb || ''; img.loading = 'lazy';
     img.onerror = () => { img.style.display='none'; };
-    const pr = document.createElement('div');
-    pr.className = 'wi-price'; pr.textContent = fmt(c.p);
-    const sl = document.createElement('div');
-    sl.className = 'wi-slot'; sl.textContent = 'S' + c.origIdx;
-    el.append(img, pr, sl);
-    if (isUsed) {
-      const badge = document.createElement('div');
-      badge.className = 'wi-chosen'; badge.textContent = '✓ USED';
-      badge.style.background = '#1a6b1a';
-      el.appendChild(badge);
-    } else if (isAuto) {
-      const badge = document.createElement('div');
-      badge.className = 'wi-chosen'; badge.textContent = 'AUTO';
-      badge.style.background = '#444';
-      el.appendChild(badge);
+    const pbar = document.createElement('div');
+    pbar.className = 'tile-pbar';
+    const pr = document.createElement('span');
+    pr.className = 'tile-price'; pr.textContent = fmt(c.p);
+    const dt = document.createElement('span');
+    if (isChosen)  { dt.className='tile-delta same';  dt.textContent='chosen'; }
+    else if (dSav>0) { dt.className='tile-delta';       dt.textContent='−$'+dSav; }
+    else if (dSav<0) { dt.className='tile-delta worse'; dt.textContent='+$'+Math.abs(dSav); }
+    else             { dt.className='tile-delta same';  dt.textContent='=$'; }
+    pbar.append(pr, dt);
+    const sn = document.createElement('div');
+    sn.className = 'tile-sn'; sn.textContent = 'S'+c.origIdx;
+    tile.append(img, pbar, sn);
+    if (isChosen) {
+      const star = document.createElement('div');
+      star.className = 'tile-star'; star.textContent = '★';
+      tile.appendChild(star);
     }
-    el.addEventListener('click', () => {
-      selCand = si;
-      rw.querySelectorAll('.wheel-item').forEach((el,ei) => el.classList.toggle('selected', ei===si));
-      rw.scrollTo({top: si*ITEM_H, behavior:'smooth'});
-      updateMid();
-    });
-    rw.appendChild(el);
+    if (isChosen && isConf) {
+      const chk = document.createElement('div');
+      chk.className = 'tile-chk'; chk.textContent = '✓';
+      tile.appendChild(chk);
+    }
+    tile.addEventListener('click', () => selectAndAdvance(p, c.origIdx));
+    grid.appendChild(tile);
   });
-  rw.scrollTop = initSi * ITEM_H; selCand = initSi; updateMid();
 }
 
-function updateMid() {
-  const p = displayPins[selPin]; if (!p) return;
-  const sorted = p._sorted || (p.cands||[]).map((c,i)=>({...c,origIdx:i}));
-  const c = sorted[selCand] || {};
-  midPrice.textContent = fmt(c.p || p.price);
-  midTitle.textContent = (c.title || p.title).slice(0,60);
-  midCount.textContent = (selPin+1) + '/' + displayPins.length;
-  useBtn.textContent   = 'Use ' + fmt(c.p || p.price);
-}
-
-function debounce(fn, ms) { let t; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; }
-
-lw.addEventListener('scroll', debounce(() => {
-  const i = Math.min(displayPins.length-1, Math.max(0, Math.round(lw.scrollTop/ITEM_H)));
-  if (i !== selPin) {
-    selPin = i;
-    lw.querySelectorAll('.wheel-item').forEach((el,ei) => el.classList.toggle('selected',ei===i));
-    buildRightWheel(i);
-    const p = displayPins[i];
-    if (p) document.getElementById('ebay-q').value = p.title.slice(0,60);
-  }
-}, 80));
-
-rw.addEventListener('scroll', debounce(() => {
-  const p = displayPins[selPin]; if (!p) return;
-  const sorted = p._sorted || (p.cands||[]);
-  const ci = Math.min(sorted.length-1, Math.max(0, Math.round(rw.scrollTop/ITEM_H)));
-  if (ci !== selCand) {
-    selCand = ci;
-    rw.querySelectorAll('.wheel-item').forEach((el,ei) => el.classList.toggle('selected',ei===ci));
-    updateMid();
-  }
-}, 80));
-
-useBtn.addEventListener('click', () => {
-  const p = displayPins[selPin]; if (!p) return;
-  const sorted = p._sorted || (p.cands||[]).map((c,i)=>({...c,origIdx:i}));
-  const c = sorted[selCand] || {};
-  const price = c.p || p.price;
+function selectAndAdvance(p, origIdx) {
+  const prevOrigIdx = confirmed[p.pk];
+  const prevPrice = p.price;
+  confirmed[p.pk] = origIdx;
+  const cand = (p.cands||[])[origIdx];
+  const newPrice = cand ? (cand.p||0) : 0;
+  p.price = newPrice;
+  lastUndo = { pk: p.pk, pinI: selPin, prevOrigIdx, prevPrice };
   _fbWrite(p.pk, {
-    selected_candidate_idx: c.origIdx != null ? c.origIdx : selCand,
-    display_price: price,
-    priced_at: new Date().toISOString(),
+    selected_candidate_idx: origIdx,
+    display_price: newPrice,
     match_status: 'priced',
+    priced_at: new Date().toISOString()
   });
-  const orig = useBtn.textContent;
-  useBtn.textContent = '✓ Saved!';
-  setTimeout(() => { useBtn.textContent = orig; }, 1500);
+  navigate(1);
+}
+
+function markNotAPin(p) {
+  const prevOrigIdx = confirmed[p.pk];
+  const prevPrice = p.price;
+  confirmed[p.pk] = -1;
+  p.price = 0;
+  lastUndo = { pk: p.pk, pinI: selPin, prevOrigIdx, prevPrice };
+  _fbWrite(p.pk, {
+    display_price: 0, not_a_pin: true,
+    match_status: 'not_a_pin', priced_at: new Date().toISOString()
+  });
+  navigate(1);
+}
+
+function navigate(dir) {
+  const newPi = selPin + dir;
+  if (newPi < 0 || newPi >= displayPins.length) return;
+  if (dir !== 0) lastUndo = null;
+  selPin = newPi;
+  const ei = document.getElementById('ebay-input');
+  if (ei) { ei.value = ''; delete ei.dataset.edited; }
+  sessionStorage.setItem(STORE_KEY, selPin);
+  renderPin(selPin);
+}
+
+document.getElementById('back-btn').addEventListener('click', () => { lastUndo = null; navigate(-1); });
+document.getElementById('next-btn').addEventListener('click', () => navigate(1));
+document.getElementById('nap-btn').addEventListener('click', () => {
+  const p = displayPins[selPin]; if (p) markNotAPin(p);
 });
+
+document.getElementById('undo-btn').addEventListener('click', () => {
+  if (!lastUndo) return;
+  const { pk, prevOrigIdx, prevPrice } = lastUndo;
+  const p = displayPins[selPin];
+  if (!p || p.pk !== pk) return;
+  if (prevOrigIdx != null && prevOrigIdx >= 0) {
+    confirmed[pk] = prevOrigIdx;
+    const pc = (p.cands||[])[prevOrigIdx];
+    p.price = pc ? (pc.p||0) : prevPrice;
+    _fbWrite(pk, { selected_candidate_idx: prevOrigIdx, display_price: p.price,
+                   match_status: 'priced', priced_at: new Date().toISOString() });
+  } else {
+    delete confirmed[pk];
+    p.price = prevPrice;
+    _fbWrite(pk, { selected_candidate_idx: 0, display_price: prevPrice||0 });
+  }
+  lastUndo = null;
+  renderPin(selPin);
+});
+
+document.getElementById('ebay-form').addEventListener('submit', e => {
+  e.preventDefault();
+  const q = document.getElementById('ebay-input').value.trim();
+  if (q) window.open('https://www.ebay.com/sch/i.html?_nkw=' + encodeURIComponent(q) + '&LH_Sold=1&LH_Complete=1', '_blank');
+});
+document.getElementById('ebay-input').addEventListener('input', e => { e.target.dataset.edited = '1'; });
 
 document.getElementById('manual-btn').addEventListener('click', () => {
   const p = displayPins[selPin]; if (!p) return;
   const v = parseFloat(document.getElementById('manual-price').value);
   if (isNaN(v) || v <= 0) return;
+  confirmed[p.pk] = confirmed[p.pk] != null ? confirmed[p.pk] : 0;
+  p.price = v;
   _fbWrite(p.pk, { display_price: v, match_status: 'priced', priced_at: new Date().toISOString() });
-  useBtn.textContent = '✓ Manual ' + fmt(v);
-  setTimeout(updateMid, 1500);
+  document.getElementById('manual-price').value = '';
+  renderPin(selPin);
 });
 
-document.getElementById('ebay-btn').addEventListener('click', () => {
-  const q = document.getElementById('ebay-q').value.trim();
-  if (q) window.open('https://www.ebay.com/sch/i.html?_nkw=' + encodeURIComponent(q) + '&LH_Sold=1&LH_Complete=1', '_blank');
-});
-
-// Independent sort + filter state
-let curSort   = 'desc';    // 'desc' | 'asc'
-let curFilter = 'nomatch'; // 'all' | 'nomatch' | 'unrev' | category key
-
-function applyFilterSort() {
-  const SKIP = ['match','no_match','auto_match','priced'];
+function applyFilter() {
+  const SKIP = ['match','no_match','auto_match','priced','not_a_pin'];
   let pins = [...PINS];
-  if (curFilter === 'nomatch')      pins = pins.filter(p => p.ms === 'no_match');
-  else if (curFilter === 'unrev')   pins = pins.filter(p => !SKIP.includes(p.ms));
-  else if (curFilter !== 'all')     pins = pins.filter(p => (p.cats||[]).includes(curFilter));
-  if (curSort === 'asc') pins.sort((a,b) => a.price - b.price);
-  else                   pins.sort((a,b) => b.price - a.price);
+  if (curFilter === 'nomatch')    pins = pins.filter(p => p.ms === 'no_match');
+  else if (curFilter === 'unrev') pins = pins.filter(p => !SKIP.includes(p.ms));
+  else if (curFilter !== 'all')   pins = pins.filter(p => (p.cats||[]).includes(curFilter));
   displayPins = pins;
-  buildLeftWheel();
+  const saved = parseInt(sessionStorage.getItem(STORE_KEY) || '0', 10);
+  selPin = Math.min(saved, Math.max(0, displayPins.length - 1));
+  lastUndo = null;
+  document.getElementById('ctp-count').textContent = displayPins.length + ' / ' + PINS.length + ' pins';
   updateFilterCounts();
+  renderPin(selPin);
 }
 
 function updateFilterCounts() {
-  const SKIP = ['match','no_match','auto_match','priced'];
+  const SKIP = ['match','no_match','auto_match','priced','not_a_pin'];
   document.querySelectorAll('.filt-btn').forEach(btn => {
     const span = btn.querySelector('.fb-cnt');
     if (!span) return;
@@ -328,38 +390,27 @@ function updateFilterCounts() {
   });
 }
 
-document.querySelectorAll('.sort-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    curSort = btn.dataset.sort;
-    applyFilterSort();
-  });
-});
-
 document.querySelectorAll('.filt-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.filt-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     curFilter = btn.dataset.filter;
-    applyFilterSort();
+    sessionStorage.removeItem(STORE_KEY);
+    applyFilter();
   });
 });
 
-applyFilterSort();
+applyFilter();
 
-// Jump to specific pin if ?pin= param present (e.g. from contact sheet tap)
+// Jump to specific pin if ?pin= param present
 (function(){
   const pk = new URLSearchParams(window.location.search).get('pin');
   if (!pk) return;
   const i = displayPins.findIndex(p => p.pk === pk);
   if (i < 0) return;
-  requestAnimationFrame(() => {
-    lw.scrollTop = i * ITEM_H;
-    selPin = i;
-    lw.querySelectorAll('.wheel-item').forEach((el,ei) => el.classList.toggle('selected',ei===i));
-    buildRightWheel(i);
-  });
+  selPin = i;
+  sessionStorage.setItem(STORE_KEY, i);
+  renderPin(i);
 })();
 </script>
 <script>
@@ -409,7 +460,7 @@ async function _fbReadAllPins() {
 }
 </script>
 <script>
-// Hydrate CTP v2 from Firebase REST API: update prices, match statuses, and confirmed slots
+// Hydrate CTP from Firebase REST API: update prices, match statuses, and confirmed slots
 (async function hydrateCTP() {
   const fbPins = await _fbReadAllPins();
   const keys = Object.keys(fbPins);
@@ -426,34 +477,22 @@ async function _fbReadAllPins() {
     if (pi === -1) continue;
     if (fbPin.display_price != null) { PINS[pi].price = fbPin.display_price; updated++; }
     if (fbPin.match_status)           PINS[pi].ms = fbPin.match_status;
-    if (fbPin.selected_candidate_idx != null) PINS[pi]._fbCandIdx = fbPin.selected_candidate_idx;
+    if (fbPin.selected_candidate_idx != null) {
+      PINS[pi]._fbCandIdx = fbPin.selected_candidate_idx;
+    }
+    if (fbPin.match_status === 'not_a_pin') {
+      confirmed[PINS[pi].pk] = -1;
+    } else if (fbPin.selected_candidate_idx != null) {
+      confirmed[PINS[pi].pk] = fbPin.selected_candidate_idx;
+    }
   }
   console.log('CTP: hydrated ' + updated + ' pins from Firebase (' + keys.length + ' entries found)');
-  // Update progress bar: reviewed = pins with a real match_status set
-  const SKIP = ['match','no_match','auto_match','priced','not_a_pin'];
-  const reviewed = PINS.filter(p => SKIP.includes(p.ms)).length;
-  const _fill = document.getElementById('prog-fill');
-  if (_fill) {
-    const _pct = PINS.length ? Math.round(reviewed / PINS.length * 100) : 0;
-    _fill.style.width = _pct+'%';
-    _fill.style.background = _pct===100 ? '#1a5e1a' : '#2a6eff';
-  }
-  // Re-render with updated prices/statuses
+  // Re-apply filter with updated statuses then re-check ?pin= param
   const urlPk = new URLSearchParams(window.location.search).get('pin');
-  applyFilterSort();  // also calls updateFilterCounts()
-  // Re-run ?pin= navigation if present (buildLeftWheel resets scroll)
+  applyFilter();
   if (urlPk) {
     const i = displayPins.findIndex(p => p.pk === urlPk);
-    if (i >= 0) {
-      requestAnimationFrame(() => {
-        lw.scrollTop = i * ITEM_H;
-        selPin = i;
-        lw.querySelectorAll('.wheel-item').forEach((el,ei) => el.classList.toggle('selected', ei===i));
-        buildRightWheel(i);
-        const p = displayPins[i];
-        if (p) document.getElementById('ebay-q').value = p.title.slice(0,60);
-      });
-    }
+    if (i >= 0) { selPin = i; renderPin(i); }
   }
 })();
 </script>

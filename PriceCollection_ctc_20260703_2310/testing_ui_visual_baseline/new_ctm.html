@@ -15,9 +15,9 @@ a.back-btn{color:#4a9eff;font-size:14px;text-decoration:none;padding:4px 0}
 /* Hamburger */
 #ham-btn{background:none;border:none;color:#eee;font-size:22px;
   padding:6px 4px;cursor:pointer;line-height:1;margin-left:4px}
-#nav-menu{display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:500;
-  background:rgba(0,0,0,.75)}
-#nav-menu.open{display:block}
+#nav-menu{display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;
+  background:rgba(0,0,0,.82);-webkit-transform:translateZ(0);transform:translateZ(0)}
+#nav-menu.open{display:flex;flex-direction:column}
 #nav-menu a{display:block;background:#222;border-bottom:1px solid #2a2a2a;
   padding:18px 22px;color:#eee;text-decoration:none;font-size:17px}
 #nav-menu a.current{color:#4a9eff;font-weight:600}
@@ -121,7 +121,7 @@ const FB_CFG   = {"apiKey": "AIzaSyB5HoTCon9uIFJqnF506tB_jORAG1HvI7o", "authDoma
 const TEST_RUN_ID = "test_PriceCollection_ctc_20260703_2310__build_41560_visual_baseline";
 const APPROACH_ID = "visual_baseline";
 const RUN_NAME    = "PriceCollection_ctc_20260703_2310";
-const SKIP_MS  = ["not_a_pin", "auto_match", "match", "no_match"];
+const SKIP_MS  = ["not_a_pin", "no_match", "match", "auto_match"];
 
 const STORE_KEY = 'ctm_idx_' + RUN_NAME;
 const queue = PINS.filter(p => !SKIP_MS.includes(p.ms));
