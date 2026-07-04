@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -84,4 +84,8 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: Wandalen/wretry.action@v3.4.0
+        with:
+          action: actions/deploy-pages@v4
+          attempt_limit: 3
+          attempt_delay: 45000
