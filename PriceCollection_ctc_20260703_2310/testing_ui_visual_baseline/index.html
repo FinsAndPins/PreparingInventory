@@ -1021,15 +1021,7 @@
           e.title = `${pinBoardPinLabel(p)} — ${pinImgAndPinRefLine(p)} — ${p.crop_filename}`;
           e.dataset.pinKey = p.pin_key || "";
           e.onclick = () => {
-            const i = pins.findIndex(x => x.pin_key === p.pin_key);
-            if (i >= 0) pinIndex = i;
-            window.ctpStatusFilter = "all";
-            ["ctpShowAll","ctpShowNoMatch","ctpShowMatch","ctpShowUnreviewed","ctpShowAutoMatch","ctpShowNonTopSlot"].forEach(id => {
-              const b = document.getElementById(id); if (b) b.classList.remove("active");
-            });
-            const _ab = document.getElementById("ctpShowAll"); if (_ab) _ab.classList.add("active");
-            renderPinList();
-            showPage("ctp");
+            window.location.href = 'new_ctp.html?pin=' + encodeURIComponent(p.pin_key);
           };
           const pr = document.createElement("div");
           pr.className = "price";
