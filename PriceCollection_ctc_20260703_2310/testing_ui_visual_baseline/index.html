@@ -19,6 +19,7 @@
     .boardHdrR{right:8px}
     .overlayRoot{--ov-price-h:center;--ov-price-v:center;--ov-price-font:16px;--ov-price-pad-x:10px;--ov-price-pad-y:5px;--ov-price-bg:#ffeb3b;--ov-price-fg:#111111;--ov-price-border:#222222}
     .pin{position:absolute;transform:translate(-50%,-50%);display:flex;box-sizing:border-box;border-radius:8px;cursor:pointer;justify-content:var(--ov-price-h);align-items:var(--ov-price-v);border:2px solid rgba(99,164,255,.85)}
+    .pin.no-match{border-color:#e33!important}.pin.no-match::after{content:'\2715';position:absolute;top:1px;right:2px;color:#e33;font-size:9px;font-weight:bold;line-height:1;pointer-events:none;background:rgba(0,0,0,.65);border-radius:2px;padding:0 2px}
     .overlayRoot.boxes-off .pin{border-color:transparent;background:transparent}
     .price{position:relative;box-sizing:border-box;font-weight:700;margin:0;border-radius:7px;padding:var(--ov-price-pad-y) var(--ov-price-pad-x);font-size:var(--ov-price-font);background:var(--ov-price-bg);color:var(--ov-price-fg);border:1px solid var(--ov-price-border)}
     .overlayRoot.prices-off .price{display:none!important}
@@ -1020,6 +1021,7 @@
           e.style.height = (100 * p.bbox.height / b.thumb_h) + "%";
           e.title = `${pinBoardPinLabel(p)} — ${pinImgAndPinRefLine(p)} — ${p.crop_filename}`;
           e.dataset.pinKey = p.pin_key || "";
+          if (p.match_status === 'no_match') e.classList.add('no-match'); // pin.no-match
           e.onclick = () => {
             window.location.href = 'new_ctp.html?pin=' + encodeURIComponent(p.pin_key);
           };
@@ -1738,9 +1740,11 @@
       if (rec.board_num !== undefined && rec.board_num !== null && String(rec.board_num).length) {
         p.board_num = String(rec.board_num);
       }
-      if (rec.match_status === "no_match" || rec.match_status === "match" || rec.match_status === "unreviewed" || rec.match_status === "auto_match" || rec.match_status === "not_a_pin") {
+      if (rec.match_status === "no_match" || rec.match_status === "match" || rec.match_status === "unreviewed" || rec.match_status === "auto_match" || rec.match_status === "not_a_pin" || rec.match_status === "priced") {
         p.match_status = rec.match_status;
       }
+      { const _nmEl = document.querySelector('.pin[data-pin-key=' + JSON.stringify(rec.pin_key) + ']');
+        if (_nmEl) _nmEl.classList.toggle('no-match', rec.match_status === 'no_match'); }
       if (Object.prototype.hasOwnProperty.call(rec, "ladder_preserve_zero")) {
         p.ladder_preserve_zero = !!rec.ladder_preserve_zero;
       } else {
