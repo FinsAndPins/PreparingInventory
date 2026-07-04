@@ -358,7 +358,8 @@ function selectAndAdvance(p, origIdx) {
   _fbWrite(p.pk, {
     selected_candidate_idx: origIdx,
     display_price: newPrice,
-    slot_reviewed_at: new Date().toISOString()
+    slot_reviewed_at: new Date().toISOString(),
+    match_status: 'priced'
   });
   const prevSel = selPin;
   navigate(1);
@@ -374,7 +375,8 @@ function markNotAPin(p) {
   _fbWrite(p.pk, {
     display_price: 0,
     not_a_pin: true,
-    slot_reviewed_at: new Date().toISOString()
+    slot_reviewed_at: new Date().toISOString(),
+    match_status: 'not_a_pin'
   });
   navigate(1);
 }
@@ -406,7 +408,8 @@ document.getElementById('next-btn').addEventListener('click', () => {
     _fbWrite(p.pk, {
       selected_candidate_idx: coi,
       display_price: price,
-      slot_reviewed_at: new Date().toISOString()
+      slot_reviewed_at: new Date().toISOString(),
+      match_status: 'priced'
     });
   }
   navigate(1);
