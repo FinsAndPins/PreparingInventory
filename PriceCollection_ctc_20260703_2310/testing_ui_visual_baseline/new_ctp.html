@@ -411,6 +411,13 @@ applyFilter();
 (function(){
   const pk = new URLSearchParams(window.location.search).get('pin');
   if (!pk) return;
+  // Force "all" filter so the pin is always visible regardless of its match_status
+  curFilter = 'all';
+  sessionStorage.removeItem(STORE_KEY);
+  document.querySelectorAll('.filt-btn').forEach(b => b.classList.remove('active'));
+  const _allBtn = document.querySelector('.filt-btn[data-filter="all"]');
+  if (_allBtn) _allBtn.classList.add('active');
+  applyFilter();
   const i = displayPins.findIndex(p => p.pk === pk);
   if (i < 0) return;
   selPin = i;
