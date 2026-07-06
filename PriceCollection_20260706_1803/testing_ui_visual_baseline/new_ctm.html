@@ -126,7 +126,7 @@ const FB_CFG   = {"apiKey": "AIzaSyB5HoTCon9uIFJqnF506tB_jORAG1HvI7o", "authDoma
 const TEST_RUN_ID = "test_PriceCollection_20260706_1803__build_32664_visual_baseline";
 const APPROACH_ID = "visual_baseline";
 const RUN_NAME    = "PriceCollection_20260706_1803";
-const SKIP_MS  = ["no_match", "not_a_pin", "match", "auto_match"];
+const SKIP_MS  = ["match", "auto_match", "not_a_pin", "no_match"];
 
 const STORE_KEY = 'ctm_idx_' + RUN_NAME;
 const queue = PINS.filter(p => !SKIP_MS.includes(p.ms));
