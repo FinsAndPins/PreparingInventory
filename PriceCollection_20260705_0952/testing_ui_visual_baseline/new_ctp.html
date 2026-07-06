@@ -84,12 +84,14 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
 /* ── Below-fold sections ── */
 #ebay-section,#manual-section{padding:10px 6px 8px;border-top:1px solid #222;margin-top:4px}
 .ebay-lbl,#manual-section label{font-size:10px;color:#555;margin-bottom:4px;display:block}
-#ebay-form{display:flex;gap:6px}
-#ebay-form input{flex:1;box-sizing:border-box;padding:8px 10px;
-  border-radius:6px;border:1px solid #333;background:#1a1a1a;
-  color:#fff;font-size:14px}
-#ebay-btn{background:#333;border:none;color:#eee;border-radius:6px;
-  padding:7px 12px;font-size:13px;cursor:pointer;white-space:nowrap}
+.kwToolbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:2px}
+.kwStatus{font-size:11px;opacity:.8;min-height:14px;padding-top:4px}
+.kwGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:8px}
+.kwCard{border:1px solid #2a2a33;border-radius:10px;padding:8px;background:#141418;cursor:pointer}
+.kwCard:active{border-color:#63a4ff;background:#1b1b2f}
+.kwCard img{width:100%;height:90px;object-fit:contain;border-radius:6px;background:#000}
+.kwCard .kw-p{font-weight:700;color:#f39c12;margin-top:4px;font-size:13px}
+.kwCard .kw-t{font-size:11px;line-height:1.25;margin-top:4px;max-height:3.5em;overflow:hidden}
 #manual-row{display:flex;gap:6px}
 #manual-price{flex:1;background:#222;border:1px solid #333;color:#eee;
   border-radius:6px;padding:7px 10px;font-size:14px}
@@ -129,10 +131,16 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
   <div id="tile-grid"></div>
   <div id="ebay-section">
     <div class="ebay-lbl">eBay search</div>
-    <form id="ebay-form">
-      <input id="ebay-input" type="search" placeholder="Search eBay sold listings...">
-      <button type="submit" id="ebay-btn">Search</button>
-    </form>
+    <div class="kwToolbar">
+      <input id="ebay-input" type="search" placeholder="Search eBay listings…"
+        style="flex:1;min-width:130px;padding:8px;border-radius:8px;border:1px solid #2a2a33;background:#0f0f12;color:#eee;font-size:14px">
+      <button id="ebay-btn" class="nav-btn" style="flex:none;padding:8px 12px">Search</button>
+      <button id="kwPrev" class="nav-btn" style="flex:none;padding:8px 10px" disabled>◀ 5</button>
+      <button id="kwNext" class="nav-btn" style="flex:none;padding:8px 10px" disabled>5 ▶</button>
+      <a href="#" id="kwOpenWeb" style="color:#9ec8ff;font-size:12px;white-space:nowrap">Open in tab ↗</a>
+    </div>
+    <div class="kwStatus" id="kwStatus"></div>
+    <div class="kwGrid" id="kwGrid"></div>
   </div>
   <div id="manual-section">
     <label>Manual price override</label>
@@ -319,6 +327,10 @@ function navigate(dir) {
   selPin = newPi;
   const ei = document.getElementById('ebay-input');
   if (ei) { ei.value = ''; delete ei.dataset.edited; }
+  const _kwg = document.getElementById('kwGrid'); if (_kwg) _kwg.innerHTML = '';
+  const _kws = document.getElementById('kwStatus'); if (_kws) _kws.textContent = '';
+  const _kwp = document.getElementById('kwPrev'); if (_kwp) _kwp.disabled = true;
+  const _kwn = document.getElementById('kwNext'); if (_kwn) _kwn.disabled = true;
   sessionStorage.setItem(STORE_KEY, selPin);
   renderPin(selPin);
 }
@@ -349,12 +361,118 @@ document.getElementById('undo-btn').addEventListener('click', () => {
   renderPin(selPin);
 });
 
-document.getElementById('ebay-form').addEventListener('submit', e => {
-  e.preventDefault();
-  const q = document.getElementById('ebay-input').value.trim();
-  if (q) window.open('https://www.ebay.com/sch/i.html?_nkw=' + encodeURIComponent(q) + '&LH_Sold=1&LH_Complete=1', '_blank');
-});
+// ── eBay Proxy Keyword Search ─────────────────────────────────────────────
+const _KW_PROXY = 'https://clicktoidentify-proxy.onrender.com';
+function _kwProxyBase() {
+  const qp = new URLSearchParams(location.search).get('proxy');
+  if (qp) { const s = String(qp).trim(); return (s==='1'||s.toLowerCase()==='dev') ? 'http://127.0.0.1:8091' : s.replace(/\/+$/,''); }
+  return _KW_PROXY;
+}
+function _kwFetchJson(url, ms) {
+  const ctrl = new AbortController(), t = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { signal: ctrl.signal, mode: 'cors', cache: 'no-store' })
+    .finally(() => clearTimeout(t))
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+}
+function _kwVariants(q) {
+  const base = (q||'').trim(); if (!base) return [];
+  const vs = new Set([base]);
+  const m = base.match(/^(.+?)\s*#\s*(\d+)$/i);
+  if (m) { vs.add(m[1].trim()+' '+m[2]); vs.add(m[1].trim()+' pin '+m[2]); }
+  return Array.from(vs);
+}
+function _kwDedup(items) {
+  const seen = new Set(), out = [];
+  for (const it of items||[]) { const k=(it.source||'')+'|'+(it.title||'').toLowerCase()+'|'+(it.price||''); if (!seen.has(k)){seen.add(k);out.push(it);} }
+  return out;
+}
+function _kwSortAsc(items) {
+  return (items||[]).slice().sort((a,b)=>{ const pa=parseFloat(a&&a.price!=null?a.price:NaN),pb=parseFloat(b&&b.price!=null?b.price:NaN); const na=isFinite(pa)?pa:Infinity,nb=isFinite(pb)?pb:Infinity; return na!==nb?na-nb:String(a&&a.title||'').localeCompare(String(b&&b.title||'')); });
+}
+async function _kwSearch(q, limit) {
+  const lim = limit||50, merged = []; let lastError=null, apiError=null;
+  for (const v of _kwVariants(q)) {
+    try { const data = await _kwFetchJson(_kwProxyBase()+'/keyword_search?q='+encodeURIComponent(v)+'&limit='+lim, 120000);
+      if (data&&data.error&&!apiError) apiError=String(data.error);
+      merged.push(...(Array.isArray(data.items)?data.items:[]));
+    } catch(e) { lastError=e; }
+  }
+  return { items: _kwSortAsc(_kwDedup(merged)), lastError, apiError };
+}
+function _kwPickListing(p, rawItem) {
+  const price = Math.round(parseFloat(rawItem.price)||0);
+  confirmed[p.pk] = 0;
+  p.price = price;
+  lastUndo = null;
+  _fbWrite(p.pk, { display_price: price, match_status: 'match',
+    listing_title: rawItem.title||'', priced_at: new Date().toISOString(), selected_candidate_idx: 0 });
+  renderPin(selPin);
+}
+function _kwRenderPage(p) {
+  const cur = displayPins[selPin];
+  if (!p || !cur || p.pk !== cur.pk) return;
+  const grid=document.getElementById('kwGrid'), st=document.getElementById('kwStatus'),
+        prev=document.getElementById('kwPrev'), next=document.getElementById('kwNext');
+  if (!grid) return;
+  const pool = p._kwPool||[], off = Math.max(0, p._kwOff||0), slice = pool.slice(off, off+5);
+  if (st) st.textContent = pool.length ? 'Showing '+(off+1)+'–'+(off+slice.length)+' of '+pool.length : '';
+  if (prev) prev.disabled = off<=0;
+  if (next) next.disabled = off+5>=pool.length;
+  grid.innerHTML = '';
+  slice.forEach(it => {
+    const card = document.createElement('div');
+    card.className = 'kwCard';
+    const price = Math.round(parseFloat(it.price)||0);
+    card.innerHTML = '<img src="'+(it.thumb||'')+'" alt="" onerror="this.style.display=\'none\'"><div class="kw-p">$'+price+'</div><div class="kw-t">'+(it.title||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</div>';
+    card.addEventListener('click', () => _kwPickListing(p, it));
+    grid.appendChild(card);
+  });
+}
+// Search button / Enter key
 document.getElementById('ebay-input').addEventListener('input', e => { e.target.dataset.edited = '1'; });
+document.getElementById('ebay-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); document.getElementById('ebay-btn').click(); }
+});
+document.getElementById('kwOpenWeb').addEventListener('click', ev => {
+  ev.preventDefault();
+  const q = (document.getElementById('ebay-input').value||'').trim();
+  if (q) window.open('https://www.ebay.com/sch/i.html?_nkw='+encodeURIComponent(q)+'&LH_Sold=1&LH_Complete=1','_blank');
+});
+document.getElementById('ebay-btn').addEventListener('click', async () => {
+  const p = displayPins[selPin]; if (!p) return;
+  const q = (document.getElementById('ebay-input').value||'').trim(); if (!q) return;
+  const searchPk = p.pk;
+  const st = document.getElementById('kwStatus');
+  if (st) st.textContent = 'Searching…';
+  try {
+    const { items, lastError, apiError } = await _kwSearch(q, 50);
+    if (!displayPins[selPin] || displayPins[selPin].pk !== searchPk) return;
+    p._kwPool = items; p._kwOff = 0;
+    if (!items.length) {
+      const parts = [];
+      if (apiError) parts.push(apiError);
+      if (lastError && lastError.name==='AbortError') parts.push('Timed out — proxy may be cold-starting, try again in 1–2 min.');
+      else if (lastError) parts.push(String(lastError.message||lastError));
+      parts.push('Proxy: '+_kwProxyBase());
+      if (st) st.textContent = 'No results. '+parts.filter(Boolean).join(' ');
+    } else if (st) st.textContent = '';
+    _kwRenderPage(p);
+  } catch(e) {
+    if (!displayPins[selPin] || displayPins[selPin].pk !== searchPk) return;
+    p._kwPool = [];
+    if (st) st.textContent = 'Search failed: '+(e&&e.message?e.message:e);
+    _kwRenderPage(p);
+  }
+});
+document.getElementById('kwPrev').addEventListener('click', () => {
+  const p = displayPins[selPin]; if (!p) return;
+  p._kwOff = Math.max(0, (p._kwOff||0)-5); _kwRenderPage(p);
+});
+document.getElementById('kwNext').addEventListener('click', () => {
+  const p = displayPins[selPin]; if (!p) return;
+  const pool = p._kwPool||[], cur = p._kwOff||0;
+  if (cur+5 < pool.length) p._kwOff = cur+5; _kwRenderPage(p);
+});
 
 document.getElementById('manual-btn').addEventListener('click', () => {
   const p = displayPins[selPin]; if (!p) return;
