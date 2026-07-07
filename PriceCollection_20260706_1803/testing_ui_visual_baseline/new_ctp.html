@@ -398,13 +398,30 @@ async function _kwSearch(q, limit) {
   return { items: _kwSortAsc(_kwDedup(merged)), lastError, apiError };
 }
 function _kwPickListing(p, rawItem) {
-  const price = Math.round(parseFloat(rawItem.price)||0);
+  const price = Math.round(parseFloat(rawItem.price) || 0);
+  const prevOrigIdx = confirmed[p.pk];
+  const prevPrice = p.price;
+  const kwCand = {
+    p: price,
+    thumb: rawItem.thumb || '',
+    title: (rawItem.title || '').slice(0, 80),
+    url: rawItem.source || rawItem.url || ''
+  };
+  const rest = (p.cands || []).filter(c => (c.url || '') !== kwCand.url);
+  p.cands = [kwCand, ...rest].slice(0, 10);
   confirmed[p.pk] = 0;
   p.price = price;
-  lastUndo = null;
-  _fbWrite(p.pk, { display_price: price, match_status: 'match',
-    listing_title: rawItem.title||'', priced_at: new Date().toISOString(), selected_candidate_idx: 0 });
-  renderPin(selPin);
+  if (kwCand.title) p.title = kwCand.title;
+  p.ms = 'priced';
+  lastUndo = { pk: p.pk, pinI: selPin, prevOrigIdx, prevPrice };
+  _fbWrite(p.pk, {
+    selected_candidate_idx: 0,
+    display_price: price,
+    match_status: 'priced',
+    listing_title: kwCand.title,
+    priced_at: new Date().toISOString()
+  });
+  navigate(1);
 }
 function _kwRenderPage(p) {
   const cur = displayPins[selPin];
