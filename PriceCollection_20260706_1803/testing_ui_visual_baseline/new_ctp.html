@@ -361,11 +361,21 @@ document.getElementById('undo-btn').addEventListener('click', () => {
 
 // ── eBay Proxy Keyword Search ─────────────────────────────────────────────
 const _KW_PROXY = 'https://clicktoidentify-proxy.onrender.com';
+let _kwProxyReady = null;
 function _kwProxyBase() {
   const qp = new URLSearchParams(location.search).get('proxy');
   if (qp) { const s = String(qp).trim(); return (s==='1'||s.toLowerCase()==='dev') ? 'http://127.0.0.1:8091' : s.replace(/\/+$/, ''); }
   return _KW_PROXY;
 }
+function _kwWarmProxy() {
+  if (!_kwProxyReady) {
+    _kwProxyReady = fetch(_kwProxyBase() + '/health', { mode: 'cors', cache: 'no-store' })
+      .catch(() => fetch(_kwProxyBase() + '/keyword_search?q=disney+pin&limit=1', { mode: 'cors', cache: 'no-store' }))
+      .catch(() => {});
+  }
+  return _kwProxyReady;
+}
+_kwWarmProxy();
 function _kwFetchJson(url, ms) {
   const ctrl = new AbortController(), t = setTimeout(() => ctrl.abort(), ms);
   return fetch(url, { signal: ctrl.signal, mode: 'cors', cache: 'no-store' })
@@ -387,13 +397,33 @@ function _kwDedup(items) {
 function _kwSortAsc(items) {
   return (items||[]).slice().sort((a,b)=>{ const pa=parseFloat(a&&a.price!=null?a.price:NaN),pb=parseFloat(b&&b.price!=null?b.price:NaN); const na=isFinite(pa)?pa:Infinity,nb=isFinite(pb)?pb:Infinity; return na!==nb?na-nb:String(a&&a.title||'').localeCompare(String(b&&b.title||'')); });
 }
+async function _kwQueryVariant(v, lim) {
+  const data = await _kwFetchJson(_kwProxyBase()+'/keyword_search?q='+encodeURIComponent(v)+'&limit='+lim, 120000);
+  let apiError = (data && data.error) ? String(data.error) : null;
+  const items = Array.isArray(data && data.items) ? data.items : [];
+  return { items, apiError };
+}
 async function _kwSearch(q, limit) {
-  const lim = limit||50, merged = []; let lastError=null, apiError=null;
-  for (const v of _kwVariants(q)) {
-    try { const data = await _kwFetchJson(_kwProxyBase()+'/keyword_search?q='+encodeURIComponent(v)+'&limit='+lim, 120000);
-      if (data&&data.error&&!apiError) apiError=String(data.error);
-      merged.push(...(Array.isArray(data.items)?data.items:[]));
-    } catch(e) { lastError=e; }
+  const lim = limit||50;
+  const variants = _kwVariants(q);
+  if (!variants.length) return { items: [], lastError: null, apiError: null };
+  await _kwWarmProxy();
+  let merged = [], lastError = null, apiError = null;
+  try {
+    const first = await _kwQueryVariant(variants[0], lim);
+    if (first.apiError && !apiError) apiError = first.apiError;
+    merged.push(...first.items);
+  } catch (e) { lastError = e; }
+  if (merged.length >= 8 || variants.length === 1) {
+    return { items: _kwSortAsc(_kwDedup(merged)), lastError, apiError };
+  }
+  const extra = await Promise.all(variants.slice(1).map(async v => {
+    try { return await _kwQueryVariant(v, lim); }
+    catch (e) { lastError = lastError || e; return { items: [], apiError: null }; }
+  }));
+  for (const hit of extra) {
+    if (hit.apiError && !apiError) apiError = hit.apiError;
+    merged.push(...hit.items);
   }
   return { items: _kwSortAsc(_kwDedup(merged)), lastError, apiError };
 }
