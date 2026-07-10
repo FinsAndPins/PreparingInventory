@@ -212,11 +212,41 @@ function candToSelected(c, idx) {
 function chosenIdx(p) {
   if (confirmed[p.pk] != null && confirmed[p.pk] >= 0) return confirmed[p.pk];
   if (p._fbCandIdx != null) return p._fbCandIdx;
-  return (p.show_slot != null ? p.show_slot : 0);
+  return scriptDefaultIdx(p);
 }
 
 function _isPinCommitted(p) {
   return confirmed[p.pk] != null;
+}
+
+function scriptDefaultIdx(p) {
+  return (p.show_slot != null ? p.show_slot : 0);
+}
+
+/** Accept pipeline default when leaving a pin unchanged (matches original ClickToPrice). */
+async function commitDefaultIfNeeded(p) {
+  if (!p || _isPinCommitted(p)) return;
+  const idx = scriptDefaultIdx(p);
+  const cand = (p.cands || [])[idx];
+  const dp = cand ? (cand.p || p.price || 0) : (p.price || 0);
+  await _fbCommitPin(p, {
+    selected_candidate_idx: idx,
+    display_price: dp,
+    match_status: 'match',
+    listing_title: cand ? cand.title : undefined,
+  });
+  updateFilterCounts();
+}
+
+async function advanceNext() {
+  const p = displayPins[selPin];
+  if (!p) return;
+  await commitDefaultIfNeeded(p);
+  if (selPin >= displayPins.length - 1) {
+    renderPin(selPin);
+    return;
+  }
+  navigate(1);
 }
 
 /** Write the same Firebase row shape as index.html ClickToPrice (overlay + collab). */
@@ -414,7 +444,7 @@ function navigate(dir) {
 }
 
 document.getElementById('back-btn').addEventListener('click', () => { lastUndo = null; navigate(-1); });
-document.getElementById('next-btn').addEventListener('click', () => navigate(1));
+document.getElementById('next-btn').addEventListener('click', () => { advanceNext(); });
 document.getElementById('nap-btn').addEventListener('click', () => {
   const p = displayPins[selPin]; if (p) markNotAPin(p);
 });
