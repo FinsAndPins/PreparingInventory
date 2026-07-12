@@ -2091,6 +2091,37 @@ def _patch_index_hamburger(index_path: pathlib.Path) -> None:
     print(f'Injected overlay hamburger into {index_path.name}')
 
 
+_OVERLAY_PIN_CLICK_OLD = """          e.onclick = () => {
+            const i = pins.findIndex(x => x.pin_key === p.pin_key);
+            if (i >= 0) pinIndex = i;
+            showPage("ctp");
+          };"""
+
+_OVERLAY_PIN_CLICK_NEW = """          e.onclick = () => {
+            const pk = p.pin_key || '';
+            window.location.href = pk
+              ? ('new_ctp.html?pin=' + encodeURIComponent(pk))
+              : 'new_ctp.html';
+          };"""
+
+
+def _patch_index_overlay_pin_click(index_path: pathlib.Path) -> None:
+    """Overlay harness: pin tap opens ClickToPrice v2 (unfiltered), focused via ?pin=."""
+    if not index_path.is_file():
+        print(f'WARN: {index_path} not found — skipping overlay pin-click patch')
+        return
+    html = index_path.read_text(encoding='utf-8')
+    if _OVERLAY_PIN_CLICK_NEW.strip() in html:
+        print('Overlay pin-click already patched')
+        return
+    if _OVERLAY_PIN_CLICK_OLD not in html:
+        print(f'WARN: {index_path.name} overlay pin onclick block not found — skipping')
+        return
+    html = html.replace(_OVERLAY_PIN_CLICK_OLD, _OVERLAY_PIN_CLICK_NEW, 1)
+    index_path.write_text(html, encoding='utf-8')
+    print(f'Patched overlay pin-click in {index_path.name}')
+
+
 # ── Entry point ────────────────────────────────────────────────────────────
 def _load_firebase_export(export_path: pathlib.Path) -> dict:
     """Load pin entries from a Firebase RTDB export JSON file."""
@@ -2163,6 +2194,7 @@ def main():
     _gen_new_ctp(pins, ctx, out_dir)
     _gen_nts_review(pins, ctx, out_dir, fb_pins_by_pk)
     _patch_index_hamburger(idx_path)
+    _patch_index_overlay_pin_click(idx_path)
     print('Done.')
 
 
