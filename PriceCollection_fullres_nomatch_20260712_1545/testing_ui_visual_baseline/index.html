@@ -1914,5 +1914,27 @@
     }
     start();
   </script>
+<!-- __hbg_injected__ -->
+<style>
+#_hbg_btn{position:fixed;top:6px;right:6px;z-index:900;
+  background:rgba(26,26,26,.92);border:1px solid #444;color:#eee;
+  font-size:22px;padding:4px 9px;border-radius:7px;cursor:pointer;line-height:1}
+#_hbg_menu{display:none;position:fixed;top:0;left:0;right:0;bottom:0;
+  z-index:910;background:rgba(0,0,0,.78)}
+#_hbg_menu.open{display:block}
+#_hbg_menu a{display:block;background:#222;border-bottom:1px solid #2a2a2a;
+  padding:18px 22px;color:#eee;text-decoration:none;font-size:17px}
+#_hbg_menu a:active{background:#333}
+</style>
+<button id="_hbg_btn" aria-label="Menu">&#9776;</button>
+<div id="_hbg_menu"><a href="new_ctm.html">ClickToMatch v2</a><a href="new_ctp.html">ClickToPrice v2</a><a href="contact_sheet.html">Contact Sheet</a><a href="index.html" style="color:#4a9eff;font-weight:600">Overlay</a></div>
+<script>
+(function(){
+  var btn=document.getElementById('_hbg_btn');
+  var menu=document.getElementById('_hbg_menu');
+  btn.addEventListener('click',function(e){e.stopPropagation();menu.classList.toggle('open');});
+  menu.addEventListener('click',function(e){if(e.target===this)this.classList.remove('open');});
+})();
+</script>
 </body>
 </html>
