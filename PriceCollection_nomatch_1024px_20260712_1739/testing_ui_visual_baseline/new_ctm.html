@@ -83,6 +83,7 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden;
 </div>
 <div id="nav-menu">
   <a href="new_ctm.html" class="current">ClickToMatch v2</a>
+  <a href="nts_review.html">Slot Review</a>
   <a href="new_ctp.html">ClickToPrice v2</a>
   <a href="contact_sheet.html">Contact Sheet</a>
   <a href="index.html">Overlay</a>
@@ -126,7 +127,7 @@ const FB_CFG   = {"apiKey": "AIzaSyB5HoTCon9uIFJqnF506tB_jORAG1HvI7o", "authDoma
 const TEST_RUN_ID = "test_PriceCollection_nomatch_1024px_20260712_1739__build_1375_visual_baseline_20260712_174854";
 const APPROACH_ID = "visual_baseline";
 const RUN_NAME    = "PriceCollection_nomatch_1024px_20260712_1739";
-const SKIP_MS  = ["not_a_pin", "match", "auto_match", "no_match"];
+const SKIP_MS  = ["no_match", "match", "not_a_pin", "auto_match"];
 
 const STORE_KEY = 'ctm_idx_' + RUN_NAME;
 const queue = PINS.filter(p => !SKIP_MS.includes(p.ms));
