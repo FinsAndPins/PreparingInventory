@@ -782,7 +782,10 @@ def _matched_slot_idx(pin: dict, fb_entry: dict | None = None) -> int | None:
     if idx is not None:
         idx = int(idx)
         return idx if idx > 0 else None
-    # CTM swipe-match does not write selected_candidate_idx — use displayed slot.
+    # Firebase match without index = slot-0 swipe in CTM — not a slot-review case.
+    if fb_entry and ms in _SLOT_REVIEW_MATCH:
+        return None
+    # No Firebase row yet — fall back to displayed slot for in-progress runs.
     for key in ('show_slot', 'best_slot', 'auto_slot'):
         v = pin.get(key)
         if v is not None:
