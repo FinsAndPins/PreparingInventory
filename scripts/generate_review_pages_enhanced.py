@@ -323,8 +323,9 @@ def _gen_contact_sheet(pins, ctx, out_dir):
 .card{position:relative;background:#1a1a1a;border-radius:4px;
   overflow:hidden;aspect-ratio:1;border:2px solid transparent}
 .card.ms-match{border-color:#2a7a2a}
-.card.ms-no_match{border-color:#e33}
-.card.ms-no_match::after{content:'\2715';position:absolute;top:2px;right:3px;color:#e33;font-size:10px;font-weight:bold;line-height:1;pointer-events:none;background:rgba(0,0,0,.65);border-radius:2px;padding:0 2px}
+.card.ms-no_match{border-color:#666}
+.card.ms-nomatch-needs-ctp{border-color:#e33}
+.card.ms-nomatch-needs-ctp::after{content:'\\2715';position:absolute;top:2px;right:3px;color:#e33;font-size:10px;font-weight:bold;line-height:1;pointer-events:none;background:rgba(0,0,0,.65);border-radius:2px;padding:0 2px}
 .card.ms-priced{border-color:#1a4a7a}
 .card.ms-unreviewed{border-color:#333}
 .card img{width:100%;height:100%;object-fit:contain;background:#222}
@@ -354,6 +355,7 @@ def _gen_contact_sheet(pins, ctx, out_dir):
         + '  </div>\n'
         + '  <div class="filter-bar">\n'
         + '    <button class="fb active" data-f="">All</button>\n'
+        + '    <button class="fb" data-f="nomatch_needs_ctp">No Match — no listing</button>\n'
         + '    <button class="fb" data-f="hidden">Hidden Disney</button>\n'
         + '    <button class="fb" data-f="wdi">WDI</button>\n'
         + '    <button class="fb" data-f="dec">DEC</button>\n'
@@ -369,13 +371,22 @@ const grid = document.getElementById('grid');
 const countEl = document.getElementById('hdr-count');
 let cards = [];
 
+function pinNeedsCtpListingFromFb(fbPin) {
+  if (!fbPin || fbPin.match_status !== 'no_match') return false;
+  if (fbPin.selected_candidate_idx != null) return false;
+  if (fbPin.selected_candidate) return false;
+  return true;
+}
+
 PINS.forEach(p => {
   const card = document.createElement('div');
   const msClass = ['match','no_match','auto_match'].includes(p.ms)
     ? (p.ms === 'no_match' ? 'ms-no_match' : 'ms-match')
     : 'ms-unreviewed';
-  card.className = 'card ' + msClass;
+  const needsCtp = p.ms === 'no_match';
+  card.className = 'card ' + msClass + (needsCtp ? ' ms-nomatch-needs-ctp' : '');
   card.dataset.cats = (p.cats || []).join(' ');
+  card.dataset.needsCtp = needsCtp ? '1' : '0';
   const img = document.createElement('img');
   img.loading = 'lazy';
   img.src = p.b64 || ('../crops/' + encodeURIComponent(p.crop));
@@ -399,6 +410,7 @@ function applyFilter(f) {
     const cats = c.dataset.cats || '';
     let show;
     if (!f) show = true;
+    else if (f === 'nomatch_needs_ctp') show = c.dataset.needsCtp === '1';
     else if (f === 'premium') show = ['wdi','dec','dssh','le'].some(x => cats.includes(x));
     else show = cats.includes(f);
     c.style.display = show ? '' : 'none';
@@ -431,12 +443,13 @@ applyFilter('');
   const fbPins = await _fbReadAllPins();
   const keys = Object.keys(fbPins);
   if (!keys.length) { console.log('Contact sheet: no Firebase data for this run'); return; }
-  const priceMap = {}, msMap = {};
+  const priceMap = {}, msMap = {}, needsCtpMap = {};
   for (const fbPin of Object.values(fbPins)) {
     const pk = fbPin.pin_key;
     if (!pk) continue;
     if (fbPin.display_price != null) priceMap[pk] = fbPin.display_price;
     if (fbPin.match_status)          msMap[pk]    = fbPin.match_status;
+    needsCtpMap[pk] = pinNeedsCtpListingFromFb(fbPin);
   }
   // Update summary counts
   const counts = {auto_match:0, match:0, no_match:0, not_a_pin:0, priced:0};
@@ -467,6 +480,11 @@ applyFilter('');
       const cls = ms === 'no_match' ? 'ms-no_match' : ms === 'priced' ? 'ms-priced'
                 : ['match','auto_match'].includes(ms) ? 'ms-match' : 'ms-unreviewed';
       card.className = card.className.replace(/\bms-\S+/, cls);
+    }
+    if (Object.prototype.hasOwnProperty.call(needsCtpMap, pk)) {
+      const needsCtp = !!needsCtpMap[pk];
+      card.dataset.needsCtp = needsCtp ? '1' : '0';
+      card.classList.toggle('ms-nomatch-needs-ctp', needsCtp);
     }
   });
   // Re-sort grid by confirmed price descending
@@ -2074,6 +2092,52 @@ def _patch_index_hamburger(index_path: pathlib.Path) -> None:
     print(f'Injected overlay hamburger into {index_path.name}')
 
 
+_OVERLAY_NOMATCH_MARKER = '<!-- __nomatch_ctp_indicator__ -->'
+
+_OVERLAY_NOMATCH_CSS = """
+    .pin.nomatch-needs-ctp{border-color:#e33 !important;box-shadow:0 0 0 1px #e33}
+    .pin.nomatch-needs-ctp::after{content:'\\2715';position:absolute;top:0;right:0;color:#fff;background:#e33;
+      font-size:11px;font-weight:bold;line-height:1;padding:1px 4px;border-radius:0 6px 0 4px;pointer-events:none}
+    .overlayRoot.boxes-off .pin.nomatch-needs-ctp::after{display:none}"""
+
+_OVERLAY_NOMATCH_HELPER = """
+    function pinNeedsCtpListing(p) {
+      if ((p.match_status || "unreviewed") !== "no_match") return false;
+      if (p._fbHasListingPick) return false;
+      return true;
+    }
+"""
+
+_OVERLAY_RENDER_PIN_OLD = """          e.className = "pin";
+          e.style.left = (100 * p.bbox.x / b.thumb_w) + "%";"""
+
+_OVERLAY_RENDER_PIN_NEW = """          e.className = "pin" + (pinNeedsCtpListing(p) ? " nomatch-needs-ctp" : "");
+          e.style.left = (100 * p.bbox.x / b.thumb_w) + "%";"""
+
+_OVERLAY_APPLY_PIN_OLD = """    function applyPinRecord(rec) {
+      if (!rec || !rec.pin_key) return false;
+      const p = pinByKey(rec.pin_key);
+      if (!p) return false;
+      if (rec.selected_candidate && typeof rec.selected_candidate === "object") {"""
+
+_OVERLAY_APPLY_PIN_NEW = """    function applyPinRecord(rec) {
+      if (!rec || !rec.pin_key) return false;
+      const p = pinByKey(rec.pin_key);
+      if (!p) return false;
+      if (Object.prototype.hasOwnProperty.call(rec, "selected_candidate_idx")) {
+        p._fbHasListingPick = (typeof rec.selected_candidate_idx === "number");
+      }
+      if (rec.selected_candidate && typeof rec.selected_candidate === "object") {
+        p._fbHasListingPick = true;"""
+
+_OVERLAY_PIN_CSS_ANCHOR = (
+    '.pin{position:absolute;transform:translate(-50%,-50%);display:flex;box-sizing:border-box;'
+    'border-radius:8px;cursor:pointer;justify-content:var(--ov-price-h);align-items:var(--ov-price-v);'
+    'border:2px solid rgba(99,164,255,.85)}'
+)
+
+_OVERLAY_RENDER_ANCHOR = '    function renderOverlay() {'
+
 _OVERLAY_PIN_CLICK_OLD = """          e.onclick = () => {
             const i = pins.findIndex(x => x.pin_key === p.pin_key);
             if (i >= 0) pinIndex = i;
@@ -2103,6 +2167,49 @@ def _patch_index_overlay_pin_click(index_path: pathlib.Path) -> None:
     html = html.replace(_OVERLAY_PIN_CLICK_OLD, _OVERLAY_PIN_CLICK_NEW, 1)
     index_path.write_text(html, encoding='utf-8')
     print(f'Patched overlay pin-click in {index_path.name}')
+
+
+def _patch_index_overlay_nomatch_indicator(index_path: pathlib.Path) -> None:
+    """Overlay harness: red border + X on no_match pins without a CTP listing pick."""
+    if not index_path.is_file():
+        print(f'WARN: {index_path} not found — skipping overlay nomatch indicator')
+        return
+    html = index_path.read_text(encoding='utf-8')
+    if _OVERLAY_NOMATCH_MARKER in html:
+        print('Overlay nomatch-needs-ctp indicator already patched')
+        return
+    changed = False
+    if _OVERLAY_PIN_CSS_ANCHOR in html and '.pin.nomatch-needs-ctp' not in html:
+        html = html.replace(
+            _OVERLAY_PIN_CSS_ANCHOR,
+            _OVERLAY_PIN_CSS_ANCHOR + _OVERLAY_NOMATCH_CSS,
+            1,
+        )
+        changed = True
+    if _OVERLAY_RENDER_ANCHOR in html and 'function pinNeedsCtpListing' not in html:
+        html = html.replace(
+            _OVERLAY_RENDER_ANCHOR,
+            _OVERLAY_NOMATCH_MARKER + _OVERLAY_NOMATCH_HELPER + _OVERLAY_RENDER_ANCHOR,
+            1,
+        )
+        changed = True
+    if _OVERLAY_RENDER_PIN_NEW.strip() not in html:
+        if _OVERLAY_RENDER_PIN_OLD in html:
+            html = html.replace(_OVERLAY_RENDER_PIN_OLD, _OVERLAY_RENDER_PIN_NEW, 1)
+            changed = True
+        else:
+            print(f'WARN: {index_path.name} overlay pin class block not found — skipping')
+    if 'Object.prototype.hasOwnProperty.call(rec, "selected_candidate_idx")' not in html:
+        if _OVERLAY_APPLY_PIN_OLD in html:
+            html = html.replace(_OVERLAY_APPLY_PIN_OLD, _OVERLAY_APPLY_PIN_NEW, 1)
+            changed = True
+        else:
+            print(f'WARN: {index_path.name} applyPinRecord block not found — skipping')
+    if changed:
+        index_path.write_text(html, encoding='utf-8')
+        print(f'Patched overlay nomatch-needs-ctp indicator in {index_path.name}')
+    else:
+        print(f'WARN: no overlay nomatch-needs-ctp changes applied to {index_path.name}')
 
 
 # ── Entry point ────────────────────────────────────────────────────────────
@@ -2178,6 +2285,7 @@ def main():
     _gen_nts_review(pins, ctx, out_dir, fb_pins_by_pk)
     _patch_index_hamburger(idx_path)
     _patch_index_overlay_pin_click(idx_path)
+    _patch_index_overlay_nomatch_indicator(idx_path)
     print('Done.')
 
 
