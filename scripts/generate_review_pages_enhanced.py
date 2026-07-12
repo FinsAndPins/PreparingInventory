@@ -1470,25 +1470,8 @@ function scriptDefaultIdx(p) {
   return (p.show_slot != null ? p.show_slot : 0);
 }
 
-/** Accept pipeline default when leaving a pin unchanged (matches original ClickToPrice). */
-async function commitDefaultIfNeeded(p) {
-  if (!p || _isPinCommitted(p)) return;
-  const idx = scriptDefaultIdx(p);
-  const cand = (p.cands || [])[idx];
-  const dp = cand ? (cand.p || p.price || 0) : (p.price || 0);
-  await _fbCommitPin(p, {
-    selected_candidate_idx: idx,
-    display_price: dp,
-    match_status: 'match',
-    listing_title: cand ? cand.title : undefined,
-  });
-  updateFilterCounts();
-}
-
-async function advanceNext() {
-  const p = displayPins[selPin];
-  if (!p) return;
-  await commitDefaultIfNeeded(p);
+function advanceNext() {
+  if (!displayPins[selPin]) return;
   if (selPin >= displayPins.length - 1) {
     renderPin(selPin);
     return;
