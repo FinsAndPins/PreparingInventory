@@ -365,8 +365,9 @@ def _gen_contact_sheet(pins, ctx, out_dir):
         + '    </div></div>\n'
         + '  </div>\n'
         + '  <div class="filter-bar">\n'
-        + '    <button class="fb active" data-f="">All</button>\n'
+        + '    <button class="fb active" data-f="">All Pins</button>\n'
         + '    <button class="fb" data-f="nomatch_needs_ctp">No Match — no listing</button>\n'
+        + '    <button class="fb" data-f="all_detections">All Detections</button>\n'
         + '    <button class="fb" data-f="hidden">Hidden Disney</button>\n'
         + '    <button class="fb" data-f="wdi">WDI</button>\n'
         + '    <button class="fb" data-f="dec">DEC</button>\n'
@@ -397,6 +398,7 @@ PINS.forEach(p => {
   const needsCtp = p.ms === 'no_match';
   card.className = 'card ' + msClass + (needsCtp ? ' ms-nomatch-needs-ctp' : '');
   card.dataset.cats = (p.cats || []).join(' ');
+  card.dataset.ms = p.ms || 'unreviewed';
   card.dataset.needsCtp = needsCtp ? '1' : '0';
   const img = document.createElement('img');
   img.loading = 'lazy';
@@ -420,7 +422,8 @@ function applyFilter(f) {
   cards.forEach((c) => {
     const cats = c.dataset.cats || '';
     let show;
-    if (!f) show = true;
+    if (!f) show = (c.dataset.ms || '') !== 'not_a_pin';
+    else if (f === 'all_detections') show = true;
     else if (f === 'nomatch_needs_ctp') show = c.dataset.needsCtp === '1';
     else if (f === 'premium') show = ['wdi','dec','dssh','le'].some(x => cats.includes(x));
     else show = cats.includes(f);
@@ -488,6 +491,7 @@ applyFilter('');
     }
     if (msMap[pk]) {
       const ms = msMap[pk];
+      card.dataset.ms = ms;
       const cls = ms === 'no_match' ? 'ms-no_match' : ms === 'priced' ? 'ms-priced'
                 : ['match','auto_match'].includes(ms) ? 'ms-match' : 'ms-unreviewed';
       card.className = card.className.replace(/\bms-\S+/, cls);
