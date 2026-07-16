@@ -18,7 +18,17 @@ set +H
 PREP="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 CTR_REQUEST_ROOT="${HOME}/Library/Mobile Documents/com~apple~CloudDocs/ClickToRequest"
 CTR_REPO="${HOME}/Library/Mobile Documents/com~apple~CloudDocs/GitHub Repository/ClickToClaim"
-PIN_DIR="${PIN_PRICING_RFDETR_DIR:-${HOME}/Library/Mobile Documents/com~apple~CloudDocs/Cursor Projects/PinPricingStudyMVP_RFDETR_TEST}"
+FINS_LOCAL="${HOME}/Library/Application Support/FinsAndPins"
+PIN_DIR_ICLOUD="${HOME}/Library/Mobile Documents/com~apple~CloudDocs/Cursor Projects/PinPricingStudyMVP_RFDETR_TEST"
+PIN_DIR_LOCAL="${FINS_LOCAL}/PinPricingStudyMVP_RFDETR_TEST"
+# Prefer Application Support under launchd — iCloud .rfdetr_py39 often fails numpy mmap (errno 11).
+if [[ -n "${PIN_PRICING_RFDETR_DIR:-}" ]]; then
+  PIN_DIR="${PIN_PRICING_RFDETR_DIR}"
+elif [[ -x "${PIN_DIR_LOCAL}/.rfdetr_py39/bin/python" ]] && [[ -f "${PIN_DIR_LOCAL}/rfdetr_coreml_detector.py" ]]; then
+  PIN_DIR="${PIN_DIR_LOCAL}"
+else
+  PIN_DIR="${PIN_DIR_ICLOUD}"
+fi
 LOG_DIR="${HOME}/Library/Logs/show-automation"
 LIVE_BASE="https://finsandpins.github.io/ClickToClaim"
 
@@ -150,12 +160,22 @@ preflight_rfdetr() {
   if [[ ! -f "${PIN_DIR}/rfdetr_coreml_detector.py" ]]; then
     die "Missing rfdetr_coreml_detector.py in ${PIN_DIR}"
   fi
+  # Smoke-test numpy in this process context (launchd often breaks iCloud .so mmap).
+  if ! "${PIN_DIR}/.rfdetr_py39/bin/python" -c "import numpy" >/dev/null 2>&1; then
+    if [[ "$PIN_DIR" != "$PIN_DIR_LOCAL" ]] && [[ -x "${PIN_DIR_LOCAL}/.rfdetr_py39/bin/python" ]]; then
+      log "WARN: RF-DETR numpy failed at ${PIN_DIR}; falling back to ${PIN_DIR_LOCAL}"
+      PIN_DIR="${PIN_DIR_LOCAL}"
+    else
+      die "RF-DETR numpy import failed under ${PIN_DIR} (iCloud mmap?). Re-run launchd/install_boards_inbox_launchagent.sh to refresh Application Support PinPricingStudyMVP_RFDETR_TEST."
+    fi
+  fi
   local model_path
   model_path="${RFDETR_COREML_MODEL_PATH:-${HOME}/Desktop/ClickToCollectApp/ClickToCollect/ClickToCollect/RfDetrPinDetector.mlpackage}"
   model_path="${model_path/#\~/$HOME}"
   if [[ ! -e "$model_path" ]]; then
     die "RF-DETR Core ML model not found: ${model_path} (set RFDETR_COREML_MODEL_PATH)"
   fi
+  log "RF-DETR PIN_DIR=${PIN_DIR}"
 }
 
 commit_and_push() {

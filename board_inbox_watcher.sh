@@ -101,11 +101,46 @@ _board_find_board_files() {
     ! -name '.gitkeep' ! -name '.DS_Store' 2>/dev/null "$@"
 }
 
+BOARD_MIN_BYTES="${BOARD_MIN_BYTES:-1024}"
+FINS_LOCAL="${HOME}/Library/Application Support/FinsAndPins"
+
+_board_file_bytes_ok() {
+  local f="${1:?}"
+  local sz
+  sz=$(stat -f %z "$f" 2>/dev/null || echo 0)
+  [[ "$sz" -ge "${BOARD_MIN_BYTES}" ]]
+}
+
+_icloud_request_download() {
+  local f="${1:?}"
+  if command -v brctl >/dev/null 2>&1; then
+    brctl download "$f" 2>/dev/null || true
+  fi
+}
+
+# Copy one board photo from iCloud → local mirror; wait until bytes are present (not a CloudDocs stub).
+_pull_single_board_file() {
+  local src="${1:?}" dest="${2:?}"
+  local attempt
+  for attempt in 1 2 3 4 5 6 7 8 9 10; do
+    _icloud_request_download "$src"
+    rm -f "$dest" 2>/dev/null || true
+    if /bin/cp -f "$src" "$dest" 2>/dev/null || /usr/bin/ditto "$src" "$dest" 2>/dev/null; then
+      if _board_file_bytes_ok "$dest"; then
+        return 0
+      fi
+    fi
+    sleep 2
+  done
+  echo "[$(date -Iseconds)] WARN bridge_pull: could not materialize $(basename "$src") (still < ${BOARD_MIN_BYTES} bytes after retries)"
+  return 1
+}
+
 # Pull canonical iCloud BoardsToPrice → local mirror so launchd can see uploads.
-# - Do NOT use rsync here: on CloudDocs placeholders it often fails with
+# - Do NOT use rsync for the whole folder: on CloudDocs placeholders it often fails with
 #   "mmap: Resource deadlock avoided" while files are still evicted / downloading.
-# - Run in bash (not osascript): same FDA as the watcher; avoids nested TCC quirks.
 # - ditto copies without rsync's mmap path; no --delete (never wipe mirror on partial read).
+# - If ditto fails, retry then per-file cp/ditto fallback (launchd often cannot ditto iCloud stubs).
 bridge_pull_icloud_inbox_to_scan_dir() {
   [[ -n "${BOARD_INBOX_DIR:-}" ]] || return 0
   mkdir -p "${BOARD_INBOX_DIR}"
@@ -113,10 +148,79 @@ bridge_pull_icloud_inbox_to_scan_dir() {
   if [[ ! -d "$src" ]]; then
     return 0
   fi
-  local out ec=0
-  out=$(/usr/bin/ditto "$src/" "${BOARD_INBOX_DIR}/" 2>&1) || ec=$?
-  if [[ "$ec" -ne 0 ]]; then
-    echo "[$(date -Iseconds)] WARN bridge_pull: ditto exit ${ec}: ${out}"
+  local out ec=0 attempt f
+  for attempt in 1 2 3 4 5; do
+    ec=0
+    out=$(/usr/bin/ditto "$src/" "${BOARD_INBOX_DIR}/" 2>&1) || ec=$?
+    if [[ "$ec" -eq 0 ]]; then
+      local need_retry=0 dest
+      while IFS= read -r -d '' f; do
+        dest="${BOARD_INBOX_DIR}/$(basename "$f")"
+        if [[ -f "$dest" ]] && _board_file_bytes_ok "$dest"; then
+          continue
+        fi
+        need_retry=1
+        _pull_single_board_file "$f" "$dest" || true
+      done < <(find "$src" -maxdepth 1 -type f \
+        \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \
+        -o -iname '*.heic' -o -iname '*.heif' \
+        -o -iname '*.webp' -o -iname '*.tif' -o -iname '*.tiff' \) \
+        ! -name '.gitkeep' ! -name '.DS_Store' -print0 2>/dev/null)
+      if [[ "$need_retry" -eq 0 ]]; then
+        return 0
+      fi
+      echo "[$(date -Iseconds)] WARN bridge_pull: ditto ok but mirror still has stub(s); retried per-file pull"
+      return 0
+    fi
+    if [[ "$attempt" -lt 5 ]]; then
+      echo "[$(date -Iseconds)] WARN bridge_pull: ditto exit ${ec} (attempt ${attempt}/5): ${out}"
+      sleep 2
+    fi
+  done
+  echo "[$(date -Iseconds)] WARN bridge_pull: ditto exit ${ec} after 5 tries: ${out}; per-file copy fallback"
+  while IFS= read -r -d '' f; do
+    [[ -f "$f" ]] || continue
+    local dest="${BOARD_INBOX_DIR}/$(basename "$f")"
+    _pull_single_board_file "$f" "$dest" || true
+  done < <(find "$src" -maxdepth 1 -type f \
+    \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \
+    -o -iname '*.heic' -o -iname '*.heif' \
+    -o -iname '*.webp' -o -iname '*.tif' -o -iname '*.tiff' \) \
+    ! -name '.gitkeep' ! -name '.DS_Store' -print0 2>/dev/null)
+}
+
+_pin_venv_ready() {
+  local pin="$1"
+  [[ -x "${pin}/.venv/bin/python" ]] || return 1
+  "${pin}/.venv/bin/python" -c "import imagehash; from PIL import Image" >/dev/null 2>&1
+}
+
+# Prefer Application Support copy under launchd (iCloud .venv often fails imports).
+_resolve_pin_pricing_study_mvp() {
+  local icloud_cursor="${HOME}/Library/Mobile Documents/com~apple~CloudDocs/Cursor Projects"
+  local pin_rfdetr_icloud="${icloud_cursor}/PinPricingStudyMVP_RFDETR_TEST"
+  local pin_robo_icloud="${icloud_cursor}/PinPricingStudyMVP"
+  local pin_rfdetr_local="${FINS_LOCAL}/PinPricingStudyMVP_RFDETR_TEST"
+  local pin_robo_local="${FINS_LOCAL}/PinPricingStudyMVP"
+  local use_rfdetr=1
+  if [[ "${PIN_PRICING_USE_RFDETR:-1}" == "0" ]] || [[ "${PIN_PRICING_USE_RFDETR:-1}" == "false" ]] || [[ "${PIN_PRICING_USE_RFDETR:-1}" == "False" ]]; then
+    use_rfdetr=0
+  fi
+  if [[ "$use_rfdetr" -eq 0 ]]; then
+    if [[ -n "${LOCAL_WATCHER_BIN:-}" ]] && _pin_venv_ready "$pin_robo_local"; then
+      printf '%s' "$pin_robo_local"
+    else
+      printf '%s' "${PIN_PRICING_STUDY_MVP:-$pin_robo_icloud}"
+    fi
+    return
+  fi
+  if [[ -n "${LOCAL_WATCHER_BIN:-}" ]] && _pin_venv_ready "$pin_rfdetr_local"; then
+    printf '%s' "$pin_rfdetr_local"
+  else
+    if [[ -n "${LOCAL_WATCHER_BIN:-}" ]]; then
+      echo "[$(date -Iseconds)] WARN: local PinPricing .venv not ready (${pin_rfdetr_local}); run launchd/install_boards_inbox_launchagent.sh to copy .venv off iCloud" >&2
+    fi
+    printf '%s' "${PIN_PRICING_STUDY_MVP:-$pin_rfdetr_icloud}"
   fi
 }
 
@@ -124,17 +228,14 @@ run_price_pipeline() {
   # Do not wrap price_boards in osascript "do shell script": that environment cannot write under
   # ~/Library/Mobile Documents/... (e.g. mkdir/touch BoardsToPrice, git), so the run dies right after
   # moving the mirror inbox. launchd already runs this watcher as your GUI user — caffeinate + bash is enough.
-  local icloud_cursor="${HOME}/Library/Mobile Documents/com~apple~CloudDocs/Cursor Projects"
-  local pin_rfdetr="${icloud_cursor}/PinPricingStudyMVP_RFDETR_TEST"
-  local pin_robo="${icloud_cursor}/PinPricingStudyMVP"
-  # Automatic pricing: RF-DETR on-device (override with PIN_PRICING_USE_RFDETR=0 for Roboflow API).
   export PIN_PRICING_USE_RFDETR="${PIN_PRICING_USE_RFDETR:-1}"
   if [[ "${PIN_PRICING_USE_RFDETR}" == "0" ]] || [[ "${PIN_PRICING_USE_RFDETR}" == "false" ]] || [[ "${PIN_PRICING_USE_RFDETR}" == "False" ]]; then
-    export PIN_PRICING_STUDY_MVP="${PIN_PRICING_STUDY_MVP:-$pin_robo}"
+    :
   else
-    export PIN_PRICING_STUDY_MVP="${PIN_PRICING_STUDY_MVP:-$pin_rfdetr}"
     export PIN_PRICING_RFDETR_MIN_CONF="${PIN_PRICING_RFDETR_MIN_CONF:-0.25}"
   fi
+  export PIN_PRICING_STUDY_MVP="$(_resolve_pin_pricing_study_mvp)"
+  echo "[$(date -Iseconds)] PIN_PRICING_STUDY_MVP=${PIN_PRICING_STUDY_MVP}"
   PREP="$PREP" BOARD_INBOX_DIR="${BOARD_INBOX_DIR:-}" /usr/bin/caffeinate -dimsu -- /bin/bash "$PRICE_SCRIPT"
 }
 
