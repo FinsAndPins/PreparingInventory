@@ -33,7 +33,9 @@ def _cats(title: str) -> list:
     return result
 
 def _price(c: dict) -> float:
-    v = c.get('total_price') or c.get('price') or 0
+    # Item price without shipping — buyers pay shipping either way (Whatnot or
+    # eBay), so the pin-only price is the comparable number across listings.
+    v = c.get('price') or c.get('total_price') or 0
     try: return float(v)
     except: return 0.0
 
