@@ -79,7 +79,8 @@ def _extract_firebase(idx_path: pathlib.Path):
             print(f'  WARN: firebase extract failed: {e}')
     return {}, '', 'visual_baseline'
 
-def _embed_thumbnails(pins: list, crop_dir: pathlib.Path, size: int = 120) -> None:
+# 360/q82 matches the classic Lexi harness thumbnails; 120/q72 looked pixelated on retina.
+def _embed_thumbnails(pins: list, crop_dir: pathlib.Path, size: int = 360) -> None:
     """Resize each crop to a small thumbnail and embed as base64 data URI."""
     try:
         from PIL import Image
@@ -99,7 +100,7 @@ def _embed_thumbnails(pins: list, crop_dir: pathlib.Path, size: int = 120) -> No
             img = Image.open(path).convert('RGB')
             img.thumbnail((size, size), Image.LANCZOS)
             buf = io.BytesIO()
-            img.save(buf, 'JPEG', quality=72, optimize=True)
+            img.save(buf, 'JPEG', quality=82, optimize=True)
             p['crop_b64'] = 'data:image/jpeg;base64,' + _b64lib.b64encode(buf.getvalue()).decode()
             ok += 1
         except Exception:
