@@ -11,6 +11,11 @@
 #                            Board inbox watcher sets this to 1 by default; RunBoardsPricing.command sets 0 (Roboflow API).
 #   POOL_N, GATE_T        — passed to run_visual_baseline_pipeline.py
 #   SKIP_GIT=1            — skip commit and push
+#   PIN_PRICING_KEYS_DIR  — local dir with ebay_keys.json (default: Application Support/FinsAndPins/keys)
+#   PRICE_PUBLISH_REPO    — local-disk git clone used for commit/push (default: Application Support/
+#                           FinsAndPins/PreparingInventoryGit). iCloud .git is unreliable under launchd
+#                           (evicted .git/info/exclude broke publishing 2026-07-18); the run is copied
+#                           into this clone and pushed from there. Falls back to the iCloud repo if missing.
 #   eBay Browse resilience (optional overrides for run_visual_baseline_pipeline.py):
 #     EBAY_BROWSE_MIN_INTERVAL_SEC  EBAY_LARGE_RUN_THRESHOLD  EBAY_LARGE_RUN_MIN_INTERVAL_SEC
 #     EBAY_MAX_RETRIES  EBAY_BACKOFF_CAP_SEC  EBAY_CIRCUIT_429_THRESHOLD  EBAY_CIRCUIT_COOLDOWN_SEC
@@ -50,6 +55,26 @@ log() {
   echo "$msg" | tee -a "$LOG_FILE"
 }
 
+# Copy key files to local disk (do not delete Roboflow key — unused in RF-DETR but kept).
+ensure_local_pricing_keys() {
+  local dest="${PIN_PRICING_KEYS_DIR:-${HOME}/Library/Application Support/FinsAndPins/keys}"
+  local src="${HOME}/Library/Mobile Documents/com~apple~CloudDocs/Minimal folder for Claude"
+  mkdir -p "$dest"
+  export PIN_PRICING_KEYS_DIR="$dest"
+  local f
+  for f in ebay_keys.json "Gemini API Key.txt" "Roboflow API Key.txt"; do
+    if [[ -f "${src}/${f}" ]]; then
+      /bin/cp -f "${src}/${f}" "${dest}/${f}" 2>/dev/null || true
+      chmod 600 "${dest}/${f}" 2>/dev/null || true
+    fi
+  done
+  if [[ -s "${dest}/ebay_keys.json" ]]; then
+    log "Local pricing keys ready: ${dest} (ebay_keys.json present; Roboflow key kept, unused in RF-DETR)"
+  else
+    log "WARN: ${dest}/ebay_keys.json missing/empty — pipeline may fail reading iCloud keys under launchd"
+  fi
+}
+
 log_pipeline_stderr() {
   local err_file="$1"
   [[ -f "$err_file" ]] || return 0
@@ -62,7 +87,7 @@ log_pipeline_stderr() {
 
 # Remove abandoned .git/*.lock (Cursor/git crash → exit 128 on commit).
 clear_stale_git_lock_files() {
-  local git_dir="${PREP}/.git"
+  local git_dir="${PUBLISH_REPO:-$PREP}/.git"
   [[ -d "$git_dir" ]] || return 0
   local min_age="${GIT_STALE_LOCK_MIN_AGE_SEC:-30}"
   local now lock age
@@ -79,7 +104,7 @@ clear_stale_git_lock_files() {
 
 clear_stale_git_lock_from_stderr() {
   local err="$1"
-  local git_dir="${PREP}/.git"
+  local git_dir="${PUBLISH_REPO:-$PREP}/.git"
   [[ -d "$git_dir" ]] || return 0
   if [[ "$err" == *"index.lock"* && -f "${git_dir}/index.lock" ]]; then
     log "WARN: removing git index.lock after lock error"
@@ -345,6 +370,7 @@ pip_err="${LOG_DIR}/pipeline_${tmp}.stderr"
 : >"$pip_err"
 
 log "Pipeline start run-id=${tmp} (PIN=${PIN})"
+ensure_local_pricing_keys
 set +e
 (
   cd "$PIN" && "$PY" "$PL" \
@@ -421,23 +447,59 @@ if [[ "${SKIP_GIT:-0}" == "1" ]]; then
   exit 0
 fi
 
-cd "$PREP"
+# ── Publish from the local-disk clone (iCloud .git breaks under launchd) ──
+PUBLISH_REPO="${PRICE_PUBLISH_REPO:-${HOME}/Library/Application Support/FinsAndPins/PreparingInventoryGit}"
+if [[ ! -d "${PUBLISH_REPO}/.git" ]]; then
+  log "WARN: publish clone missing (${PUBLISH_REPO}) — falling back to iCloud repo git (less reliable under launchd)"
+  PUBLISH_REPO="$PREP"
+fi
+
+# Copy the finished run out of iCloud into the clone; plain file copies with retry
+# survive iCloud eviction far better than git internals do.
+copy_run_to_publish_repo() {
+  local src="${PREP}/${NEWNAME}" dest="${PUBLISH_REPO}/${NEWNAME}" n
+  for n in 1 2 3; do
+    if ! /usr/bin/rsync -a --exclude '_staged_boards' "${src}/" "${dest}/" >>"$LOG_FILE" 2>&1; then
+      log "WARN: rsync to publish clone reported errors (attempt ${n}/3)"
+    fi
+    if [[ -f "${dest}/candidates.json" && -f "${dest}/testing_ui_visual_baseline/index.html" ]]; then
+      touch "${dest}/.gitkeep"
+      log "Copied ${NEWNAME} → publish clone (attempt ${n})"
+      return 0
+    fi
+    sleep 5
+  done
+  log "ERROR: could not copy ${NEWNAME} into publish clone after 3 attempts"
+  return 1
+}
+
+if [[ "$PUBLISH_REPO" != "$PREP" ]]; then
+  git_with_retry git -C "$PUBLISH_REPO" pull --ff-only origin main \
+    || log "WARN: publish clone pull failed — pushing anyway (may need manual sync if push is rejected)"
+  copy_run_to_publish_repo || exit 1
+  # After a successful pipeline the canonical drop zone holds only .gitkeep; mirror that state.
+  find "${PUBLISH_REPO}/BoardsToPrice" -maxdepth 1 -type f ! -name '.gitkeep' -delete 2>/dev/null || true
+  mkdir -p "${PUBLISH_REPO}/BoardsToPrice"
+  touch "${PUBLISH_REPO}/BoardsToPrice/.gitkeep"
+fi
+
+cd "$PUBLISH_REPO"
 if [[ ! -d .git ]]; then
   log "No .git here — skipping commit/push."
   exit 0
 fi
 
-if [[ -f "${PREP}/update_pricing_index.py" ]] && command -v python3 >/dev/null 2>&1; then
-  PREP_REPO_ROOT="$PREP" python3 "${PREP}/update_pricing_index.py" 2>&1 | tee -a "$LOG_FILE" || log "WARN: update_pricing_index.py failed — Lexi landing page list may be stale"
+if [[ -f "${PUBLISH_REPO}/update_pricing_index.py" ]] && command -v python3 >/dev/null 2>&1; then
+  PREP_REPO_ROOT="$PUBLISH_REPO" python3 "${PUBLISH_REPO}/update_pricing_index.py" 2>&1 | tee -a "$LOG_FILE" || log "WARN: update_pricing_index.py failed — Lexi landing page list may be stale"
 else
   log "WARN: python3 or update_pricing_index.py missing — skipping pricing_index.json refresh"
 fi
 
 # Retention policy: keep recent PriceCollection runs on GitHub Pages (untrack older, keep on disk).
 # Defaults: keep 30 days, keep at least 10 newest, prune tracked __build__ dirs immediately.
-if [[ -f "${PREP}/prune_github_retention.py" ]] && command -v python3 >/dev/null 2>&1; then
+if [[ -f "${PUBLISH_REPO}/prune_github_retention.py" ]] && command -v python3 >/dev/null 2>&1; then
   log "Retention prune (GitHub Pages): keep_days=${RETENTION_KEEP_DAYS:-30} keep_min=${RETENTION_KEEP_MIN:-10}"
-  python3 "${PREP}/prune_github_retention.py" \
+  python3 "${PUBLISH_REPO}/prune_github_retention.py" \
     --keep-days "${RETENTION_KEEP_DAYS:-30}" \
     --keep-min "${RETENTION_KEEP_MIN:-10}" \
     2>&1 | tee -a "$LOG_FILE" || log "WARN: retention prune failed — continuing without pruning"
@@ -470,6 +532,15 @@ git_with_retry git commit -m "Add pricing run ${NEWNAME} (boards from BoardsToPr
 log "Committed. Pushing origin main…"
 git_with_retry git push origin main
 log "Done. Push complete."
+
+# Best-effort: keep the iCloud repo's git state current (clone is the source of truth).
+if [[ "$PUBLISH_REPO" != "$PREP" && -d "${PREP}/.git" ]]; then
+  if git -C "$PREP" fetch origin -q 2>>"$LOG_FILE" && git -C "$PREP" merge --ff-only origin/main -q 2>>"$LOG_FILE"; then
+    log "iCloud repo git synced to origin/main"
+  else
+    log "WARN: iCloud repo git sync failed — harmless (publish clone is source of truth), sync manually later"
+  fi
+fi
 
 if [[ -n "${BOARD_INBOX_DIR:-}" ]]; then
   log "Clearing canonical BoardsToPrice (${PREP}/BoardsToPrice) after successful push (mirror inbox — remove duplicate iCloud copies)."
