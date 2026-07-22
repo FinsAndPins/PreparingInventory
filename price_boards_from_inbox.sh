@@ -416,6 +416,24 @@ if [[ ! -f "${dst}/candidates.json" ]] || [[ ! -f "${dst}/testing_ui_visual_base
 fi
 
 if command -v python3 >/dev/null 2>&1; then
+  # Pin overlay on index.html navigates to new_ctp.html; build_testing_ui only writes
+  # index + ui_data. Without these pages, GitHub Pages pin-clicks 404 for Lexi.
+  review_py="${PREP}/scripts/generate_review_pages_enhanced.py"
+  if [[ -f "$review_py" ]]; then
+    log "Generating ClickToPrice/Match review pages (generate_review_pages_enhanced.py)"
+    if ! python3 "$review_py" "$dst" 2>&1 | tee -a "$LOG_FILE"; then
+      log "ERROR: generate_review_pages_enhanced.py failed — pin click would 404 on Pages"
+      exit 1
+    fi
+  else
+    log "ERROR: missing ${review_py} — pin click would 404 on Pages (new_ctp.html never built)"
+    exit 1
+  fi
+  if [[ ! -f "${dst}/testing_ui_visual_baseline/new_ctp.html" ]]; then
+    log "ERROR: harness missing new_ctp.html after review-page generate — refusing to publish"
+    exit 1
+  fi
+
   patch_py="${PREP}/patch_harness_ctp_scroll.py"
   if [[ -f "$patch_py" ]]; then
     log "Applying ClickToPrice scroll patch (patch_harness_ctp_scroll.py)"
