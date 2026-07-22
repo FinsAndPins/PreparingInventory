@@ -1,8 +1,9 @@
 GitHub Pages (phone):
   .../testing_ui_enhanced/enhanced_ctm.html
-  If all pins already reviewed: add ?reshow=1
+  Lexi no_match + PRICED BEFORE only: ?subset=no_match_prior
+  If all pins already reviewed: add ?reshow=1 (full override)
 Local:
   cd to this folder, then:
     python3 -m http.server 8765
-  Open: http://localhost:8765/enhanced_ctm.html
+  Open: http://localhost:8765/enhanced_ctm.html?subset=no_match_prior
 Crops: board assets on Pages; ../crops/ locally.

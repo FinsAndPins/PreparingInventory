@@ -75,7 +75,7 @@ body { margin:0; font-family:system-ui,-apple-system,sans-serif; background:var(
   <span class="tmr"><b id="tmr">0.0s</b></span>
   <button type="button" id="infoBtn">ⓘ</button>
 </div>
-<div id="infoPop">⭐ VLM = suggestion only (never auto-accept). PRICED BEFORE = itemId seen in a prior catalog run (boosted earlier; still confirm). Queue sorted by strip median (high first). On Pages use ?reshow=1 to re-open reviewed pins.</div>
+<div id="infoPop">⭐ VLM = suggestion only (never auto-accept). PRICED BEFORE = itemId seen in a prior catalog run (boosted earlier; still confirm). Queue sorted by strip median (high first). On Pages: ?subset=no_match_prior re-opens only Firebase no_match pins that have PRICED BEFORE (not all reviews). ?reshow=1 re-opens everything.</div>
 <div id="loaderr">Failed to load <code>ui_pins.json</code>.</div>
 <div id="stage" style="display:none">
   <div id="flags"></div>
@@ -349,8 +349,12 @@ function setCropImg(p) {
 }
 
 async function boot() {
-  const reshow = new URLSearchParams(location.search).has('reshow');
+  const params = new URLSearchParams(location.search);
+  const reshow = params.has('reshow');
+  // no_match pins that already have catalog/strip "PRICED BEFORE" hits — re-show only that subset
+  const subsetPrior = params.get('subset') === 'no_match_prior' || params.has('lexi_prior');
   let loaded = 0;
+  let fb = {};
   try {
     const r = await fetch('ui_pins.json');
     if (!r.ok) throw new Error('HTTP '+r.status);
@@ -363,27 +367,48 @@ async function boot() {
     return;
   }
   document.getElementById('loaderr').style.display = 'none';
-  if (!reshow) {
-    try {
-      const fb = await _fbReadAllPins();
-      PINS = PINS.filter(p => {
-        const k = p.pk.replace(/[^A-Za-z0-9_-]/g, '_');
-        const ent = fb[k] || fb[p.pk];
-        const ms = ent && ent.match_status;
-        return !ms || ms === 'unreviewed';
-      });
-    } catch (e) {}
+  try { fb = await _fbReadAllPins(); } catch (e) { fb = {}; }
+
+  function fbEnt(p) {
+    const k = p.pk.replace(/[^A-Za-z0-9_-]/g, '_');
+    return fb[k] || fb[p.pk] || null;
   }
+
+  if (subsetPrior) {
+    PINS = PINS.filter(p => {
+      if (!p.priced_before) return false;
+      const ms = (fbEnt(p) || {}).match_status;
+      return ms === 'no_match';
+    });
+    const ban = document.getElementById('banner');
+    if (ban) ban.textContent = 'ENHANCED · SUBSET no_match + PRICED BEFORE · override queue (not all pins)';
+  } else if (!reshow) {
+    PINS = PINS.filter(p => {
+      const ms = (fbEnt(p) || {}).match_status;
+      return !ms || ms === 'unreviewed';
+    });
+  }
+
   if (!PINS.length) {
     document.getElementById('total').textContent = '0';
     document.getElementById('stage').style.display = 'none';
     document.getElementById('btns').style.display = 'none';
     document.getElementById('done').style.display = 'block';
-    document.getElementById('done').innerHTML =
-      '<h2>All pins already reviewed</h2>'
-      + '<p>' + loaded + ' pins loaded from ui_pins.json; none left unreviewed in Firebase '
-      + '(shared with visual_baseline).</p>'
-      + '<p><a href="?reshow=1">Re-show all pins to override</a></p>';
+    if (subsetPrior) {
+      document.getElementById('done').innerHTML =
+        '<h2>No subset pins</h2>'
+        + '<p>No Firebase <code>no_match</code> pins with <code>priced_before</code> in this run '
+        + '(loaded ' + loaded + ' from ui_pins.json).</p>'
+        + '<p><a href="?">Back to unreviewed queue</a></p>';
+    } else {
+      document.getElementById('done').innerHTML =
+        '<h2>All pins already reviewed</h2>'
+        + '<p>' + loaded + ' pins loaded from ui_pins.json; none left unreviewed in Firebase '
+        + '(shared with visual_baseline).</p>'
+        + '<p><a href="?subset=no_match_prior">Review no_match + PRICED BEFORE only</a> '
+        + '(does not re-show matches)</p>'
+        + '<p><a href="?reshow=1">Re-show all pins to override</a></p>';
+    }
     return;
   }
   document.getElementById('total').textContent = PINS.length;
