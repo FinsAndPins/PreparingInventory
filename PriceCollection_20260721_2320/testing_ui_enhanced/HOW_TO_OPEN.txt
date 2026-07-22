@@ -5,5 +5,6 @@ GitHub Pages (phone):
 Local:
   cd to this folder, then:
     python3 -m http.server 8765
-  Open: http://localhost:8765/enhanced_ctm.html?subset=no_match_prior
-Crops: board assets on Pages; ../crops/ locally.
+  Open: http://localhost:8765/enhanced_ctm.html
+Crops: board+bbox on Pages (bbox x/y are Roboflow centers);
+  ../crops/ works locally only (not published to Pages).
