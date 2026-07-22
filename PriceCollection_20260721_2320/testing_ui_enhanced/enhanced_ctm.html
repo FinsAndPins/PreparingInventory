@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Enhanced CTM</title>
+<style>:root {
+  --bg:#121218; --card:#1a1a24; --line:#2a2a36; --accent:#ffd700;
+  --ok:#28a745; --bad:#dc3545; --muted:#8a8a98;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
+  --btn-h: clamp(44px, 7vh, 52px);
+  --pair-h: min(54svh, 420px);
+}
+* { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+body { margin:0; font-family:system-ui,-apple-system,sans-serif; background:var(--bg); color:#eee;
+  padding-top:var(--safe-t); font-size:max(14px,1rem); user-select:none; }
+#banner { background:#0f4c81; color:#fff; text-align:center; font-size:10px; font-weight:600; padding:3px; }
+#hud { display:flex; justify-content:space-between; padding:4px 10px; font-size:12px; color:var(--muted); border-bottom:1px solid var(--line); }
+#hud b { color:#fff; }
+#infoPop { display:none; position:absolute; z-index:40; left:8px; right:8px; top:48px; max-width:430px; margin:0 auto;
+  background:#1e1e2a; border:1px solid #444; border-radius:8px; padding:10px; font-size:12px; color:#ccc; }
+#infoPop.open { display:block; }
+#stage { max-width:430px; margin:0 auto; padding-bottom:calc(var(--btn-h) + 20px + var(--safe-b)); }
+#pair { display:grid; grid-template-columns:1fr 1fr; gap:3px; height:var(--pair-h); min-height:240px; }
+.panel { background:#000; border-radius:6px; overflow:hidden; display:flex; flex-direction:column; border:1.5px solid transparent; }
+#slot0 { border-color:var(--ok); cursor:pointer; }
+.panel .media { flex:1; min-height:0; }
+.panel .media img { width:100%; height:100%; object-fit:cover; display:block; }
+#slot0Meta { padding:3px 6px; font-size:11px; background:#14141c; display:flex; gap:6px; flex-wrap:wrap; }
+#slot0Meta .p { color:var(--accent); font-weight:800; }
+#slot0Meta .t { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#aaa; }
+#slot0Meta .vlmtag { display:none; background:var(--accent); color:#111; font-size:9px; padding:1px 4px; border-radius:3px; }
+#slot0.vlm #slot0Meta .vlmtag { display:inline; }
+#flags { padding:4px; display:flex; gap:6px; flex-wrap:wrap; }
+.flag { font-size:10px; padding:2px 6px; border-radius:4px; background:#333; }
+.flag.hi { background:#5c3d00; color:#ffd700; }
+.flag.pb { background:#1a3a5c; color:#9ec9ff; }
+#gridHead { padding:6px 4px 2px; font-size:10px; color:#666; text-transform:uppercase; display:flex; justify-content:space-between; }
+#cands { display:grid; grid-template-columns:repeat(3,1fr); gap:4px; padding:0 4px; }
+.cand { background:var(--card); border-radius:6px; overflow:hidden; cursor:pointer; position:relative; border:1.5px solid transparent; }
+.cand:active { border-color:var(--accent); }
+.cand .thumb { aspect-ratio:1; background:#000; }
+.cand .thumb img { width:100%; height:100%; object-fit:cover; }
+.cand .p { text-align:center; font-weight:700; color:var(--accent); font-size:12px; padding:2px; }
+.cand .star { position:absolute; top:2px; right:3px; font-size:14px; }
+.cand .pb, #slot0Media .pb {
+  position:absolute; top:2px; left:2px; z-index:2;
+  font-size:8px; line-height:1.2; max-width:92%;
+  background:#1a5e1a; color:#d4ffd4; padding:2px 4px; border-radius:2px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+#slot0Media { position:relative; }
+.cand.haspb { border-color:#2a6a2a; }
+#slot0.haspb { border-color:#2a8a2a; }
+#btns { position:fixed; bottom:0; left:0; right:0; max-width:430px; margin:0 auto; display:flex; gap:5px;
+  padding:6px 6px calc(6px + var(--safe-b)); background:rgba(18,18,24,.97); border-top:1px solid var(--line); z-index:30; }
+#btns button { flex:1; height:var(--btn-h); border:none; border-radius:10px; font-weight:700; color:#fff; cursor:pointer; }
+#undo { flex:0 0 48px; background:#333; }
+#noMatch { flex:2; background:#555; }
+#notPin { background:var(--bad); }
+#match { flex:2; background:var(--ok); }
+.flash { position:fixed; top:40%; left:0; right:0; text-align:center; font-size:44px; opacity:0; transition:opacity .3s; pointer-events:none; z-index:60; }
+#zoom { display:none; position:fixed; inset:0; background:rgba(0,0,0,.92); z-index:70; flex-direction:column; align-items:center; justify-content:center; }
+#zoom img { max-width:94vw; max-height:70vh; object-fit:contain; }
+#loaderr { padding:24px; text-align:center; color:#f88; }</style>
+</head>
+<body>
+<div id="banner">ENHANCED · Firebase PATCH · same test_run_id as visual_baseline</div>
+<div id="hud">
+  <span><b id="pos">1</b>/<b id="total">?</b></span>
+  <span>est <b id="med">–</b></span>
+  <span class="tmr"><b id="tmr">0.0s</b></span>
+  <button type="button" id="infoBtn">ⓘ</button>
+</div>
+<div id="infoPop">⭐ VLM = suggestion only (never auto-accept). PRICED BEFORE = itemId seen in a prior catalog run (boosted earlier; still confirm). Queue sorted by strip median (high first). Serve via http.server.</div>
+<div id="loaderr">Load ui_pins.json via <code>python3 -m http.server</code> from this folder.</div>
+<div id="stage" style="display:none">
+  <div id="flags"></div>
+  <div id="pair">
+    <div class="panel" id="cropPanel"><div class="media"><img id="cropImg" alt="pin"></div></div>
+    <div class="panel" id="slot0"><div class="media" id="slot0Media"></div><div id="slot0Meta"></div></div>
+  </div>
+  <div id="gridHead"><span>More candidates</span><span class="hint">tap accept · scroll 7–9</span></div>
+  <div id="cands"></div>
+</div>
+<div id="btns" style="display:none">
+  <button id="undo" type="button">↩</button>
+  <button id="noMatch" type="button">No match</button>
+  <button id="notPin" type="button">Not a pin</button>
+  <button id="match" type="button">Match</button>
+</div>
+<div id="done"></div>
+<div class="flash" id="flash"></div>
+<div id="zoom"><img id="zoomImg" alt=""><div class="zp" id="zoomP"></div><div class="zt" id="zoomT"></div></div>
+
+<script>
+const _DB_BASE = (typeof FB_CFG !== 'undefined' && FB_CFG && FB_CFG.databaseURL)
+  ? FB_CFG.databaseURL.replace(/\/+$/, '')
+  : 'https://fins-and-pins-click-to-claim-default-rtdb.firebaseio.com';
+
+function _rtdbPath(pk) {
+  return 'pin_pricing_tests/' + TEST_RUN_ID + '/' + APPROACH_ID + '/pins/'
+       + pk.replace(/[^A-Za-z0-9_-]/g, '_');
+}
+function _getUser() {
+  let u = localStorage.getItem('fpins_reviewer');
+  if (!u) {
+    try { u = (window.prompt('Your name (saved for pricing records):') || '').trim().slice(0, 30); }
+    catch(e) { u = ''; }
+    if (u) localStorage.setItem('fpins_reviewer', u);
+    else u = 'unknown';
+  }
+  return u;
+}
+function _fbToast(msg, color) {
+  let t = document.getElementById('_fb_toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = '_fb_toast';
+    t.style.cssText = 'position:fixed;bottom:70px;left:50%;transform:translateX(-50%);'
+      + 'padding:6px 14px;border-radius:20px;font-size:13px;font-weight:600;'
+      + 'z-index:99999;pointer-events:none;transition:opacity .4s;opacity:0;white-space:nowrap';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.background = color;
+  t.style.color = '#fff';
+  t.style.opacity = '1';
+  clearTimeout(t._hide);
+  t._hide = setTimeout(() => { t.style.opacity = '0'; }, 2000);
+}
+function _fbWrite(pk, fields) {
+  const url = _DB_BASE + '/' + _rtdbPath(pk) + '.json';
+  const body = JSON.stringify(Object.assign({ pin_key: pk }, fields, { reviewed_by: _getUser() }));
+  return fetch(url, { method: 'PATCH', body, headers: { 'Content-Type': 'application/json' } })
+    .then(r => {
+      if (!r.ok) { _fbToast('Save failed (' + r.status + ')', '#8b0000'); throw new Error('HTTP ' + r.status); }
+      return r;
+    })
+    .catch(e => {
+      if (!(e && e.message && String(e.message).startsWith('HTTP ')))
+        _fbToast('Save failed — network?', '#8b0000');
+      throw e;
+    });
+}
+async function _fbReadAllPins() {
+  const url = _DB_BASE + '/pin_pricing_tests/' + TEST_RUN_ID + '/' + APPROACH_ID + '/pins.json';
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) return {};
+    return (await resp.json()) || {};
+  } catch(e) { return {}; }
+}
+</script>
+
+<script>const FB_CFG = {"apiKey": "AIzaSyB5HoTCon9uIFJqnF506tB_jORAG1HvI7o", "authDomain": "fins-and-pins-click-to-claim.firebaseapp.com", "databaseURL": "https://fins-and-pins-click-to-claim-default-rtdb.firebaseio.com/", "projectId": "fins-and-pins-click-to-claim", "storageBucket": "fins-and-pins-click-to-claim.firebasestorage.app", "messagingSenderId": "31512845258", "appId": "1:31512845258:web:2124fae24cfee229084d33"};
+const TEST_RUN_ID = "test_PriceCollection_20260721_2320__build_4960_visual_baseline";
+const APPROACH_ID = "visual_baseline";
+</script>
+<script>let PINS = [], idx = 0, t0 = Date.now(), times = [], undoStack = [];
+let selected = 0, lpTimer = null, lpFired = false, lpClear = null;
+
+function money(v) { return v == null || v === '' ? '—' : '$' + Math.round(Number(v)); }
+function fmt(s) { return s < 60 ? s.toFixed(1) + 's' : Math.floor(s/60) + 'm' + Math.round(s%60) + 's'; }
+setInterval(() => { if (idx < PINS.length) document.getElementById('tmr').textContent = fmt((Date.now()-t0)/1000); }, 100);
+
+document.getElementById('infoBtn').onclick = e => { e.stopPropagation(); document.getElementById('infoPop').classList.toggle('open'); };
+document.addEventListener('click', e => {
+  const pop = document.getElementById('infoPop');
+  if (!pop.contains(e.target) && e.target !== document.getElementById('infoBtn')) pop.classList.remove('open');
+});
+
+function attachLongPress(el, getCand) {
+  el.addEventListener('pointerdown', () => {
+    clearTimeout(lpClear);
+    lpFired = false;
+    lpTimer = setTimeout(() => {
+      lpFired = true;
+      const c = getCand();
+      if (!c) return;
+      document.getElementById('zoomImg').src = c.thumb || c.crop || '';
+      document.getElementById('zoomP').textContent = money(c.p != null ? c.p : c.price);
+      document.getElementById('zoomT').textContent = c.title || '';
+      document.getElementById('zoom').style.display = 'flex';
+    }, 380);
+  });
+  ['pointerup','pointerleave','pointercancel'].forEach(ev => el.addEventListener(ev, () => {
+    clearTimeout(lpTimer);
+    document.getElementById('zoom').style.display = 'none';
+    if (lpFired) { clearTimeout(lpClear); lpClear = setTimeout(() => { lpFired = false; }, 50); }
+  }));
+  el.addEventListener('contextmenu', e => e.preventDefault());
+}
+
+function candToSelected(cand, slot) {
+  return { itemId: cand.itemId || '', title: cand.title || '', itemUrl: cand.url || '',
+    thumbUrl: cand.thumb || '', price: cand.p || 0, total_price: cand.p || 0, slot: slot };
+}
+
+function fbRow(p, ms, slot, cand) {
+  const cropFn = String((p.crop || '').split('/').pop() || '');
+  const row = { board_num: String(p.board_num||''), crop_filename: cropFn, pin_n: p.pin_n||0, match_status: ms };
+  if (ms === 'match' || ms === 'priced') {
+    row.selected_candidate_idx = slot;
+    row.selected_candidate = candToSelected(cand, slot);
+    row.display_price = Math.round(Number(cand.p||0)*100)/100;
+    row.listing_title = cand.title || '';
+  } else if (ms === 'no_match') {
+    row.selected_candidate_idx = null;
+    row.selected_candidate = null;
+    row.display_price = 0;
+  } else if (ms === 'not_a_pin') {
+    row.not_a_pin = true;
+    row.selected_candidate_idx = null;
+    row.selected_candidate = null;
+    row.display_price = 0;
+  }
+  return row;
+}
+
+function pbLabel(pb) {
+  if (!pb) return '';
+  const bits = ['BEFORE'];
+  if (pb.price_median != null && pb.price_median > 0) bits.push('$' + Math.round(Number(pb.price_median)));
+  if (pb.last_date) bits.push(String(pb.last_date).slice(0, 10));
+  return bits.join(' · ');
+}
+
+function candCell(p, i) {
+  const c = p.cands[i];
+  const d = document.createElement('div');
+  d.className = 'cand' + (c.pb ? ' haspb' : '');
+  d.innerHTML = '<div class="thumb"><img loading="lazy" src="'+c.thumb+'" onerror="this.style.opacity=.2"></div>'
+    + '<div class="p">'+money(c.p)+'</div>'
+    + (p.vlm === i ? '<div class="star">⭐</div>' : '')
+    + (c.pb ? '<div class="pb" title="Priced before (prior runs)">' + pbLabel(c.pb) + '</div>' : '');
+  d.onclick = () => { if (!lpFired) commitSlot(i); lpFired = false; };
+  attachLongPress(d, () => c);
+  return d;
+}
+
+function render() {
+  if (idx >= PINS.length) return finish();
+  const p = PINS[idx];
+  selected = 0;
+  document.getElementById('pos').textContent = idx + 1;
+  document.getElementById('med').textContent = money(p.median);
+  document.getElementById('cropImg').src = p.crop;
+  const flags = document.getElementById('flags');
+  flags.innerHTML = '';
+  if (p.hi) flags.innerHTML += '<span class="flag hi">$100+?</span>';
+  if (p.priced_before) {
+    const nPb = (p.cands || []).filter(c => c && c.pb).length;
+    flags.innerHTML += '<span class="flag pb">PRICED BEFORE' + (nPb ? ' ×' + nPb : '') + '</span>';
+  }
+  if (p.vlm != null) flags.innerHTML += '<span class="flag">VLM slot '+p.vlm+'</span>';
+  const c0 = p.cands[0] || {};
+  document.getElementById('slot0').classList.toggle('vlm', p.vlm === 0);
+  document.getElementById('slot0').classList.toggle('haspb', !!c0.pb);
+  document.getElementById('slot0Media').innerHTML = '<img src="'+c0.thumb+'" onerror="this.style.opacity=.2">'
+    + (c0.pb ? '<div class="pb slotpb">' + pbLabel(c0.pb) + '</div>' : '');
+  document.getElementById('slot0Meta').innerHTML = '<span class="p">'+money(c0.p)+'</span><span class="t">'+(c0.title||'')+'</span><span class="vlmtag">⭐ VLM</span>';
+  const grid = document.getElementById('cands');
+  grid.innerHTML = '';
+  for (let i = 1; i <= 9; i++) grid.appendChild(candCell(p, i));
+  window.scrollTo(0,0);
+  t0 = Date.now();
+}
+
+function flash(ch) {
+  const f = document.getElementById('flash');
+  f.textContent = ch; f.style.opacity = 1;
+  setTimeout(() => { f.style.opacity = 0; }, 250);
+}
+
+function commitSlot(slot) {
+  const p = PINS[idx];
+  times.push((Date.now()-t0)/1000);
+  undoStack.push({ idx, pk: p.pk });
+  const cand = (p.cands||[])[slot] || {};
+  flash('✅');
+  _fbWrite(p.pk, fbRow(p, 'match', slot, cand)).then(() => _fbToast('Saved', '#1a5e1a')).catch(()=>{});
+  idx++; render();
+}
+
+document.getElementById('slot0').onclick = () => { if (!lpFired) commitSlot(selected); lpFired = false; };
+attachLongPress(document.getElementById('slot0'), () => PINS[idx] && PINS[idx].cands[selected]);
+attachLongPress(document.getElementById('cropPanel'), () => ({ thumb: PINS[idx].crop, p: PINS[idx].median, title: 'Your pin' }));
+
+document.getElementById('match').onclick = () => commitSlot(selected);
+document.getElementById('noMatch').onclick = () => {
+  const p = PINS[idx];
+  times.push((Date.now()-t0)/1000);
+  undoStack.push({ idx, pk: p.pk });
+  flash('🚫');
+  _fbWrite(p.pk, fbRow(p, 'no_match', null, {})).then(() => _fbToast('Saved', '#1a5e1a')).catch(()=>{});
+  idx++; render();
+};
+document.getElementById('notPin').onclick = () => {
+  const p = PINS[idx];
+  times.push((Date.now()-t0)/1000);
+  undoStack.push({ idx, pk: p.pk });
+  flash('❌');
+  _fbWrite(p.pk, fbRow(p, 'not_a_pin', null, {})).then(() => _fbToast('Saved', '#1a5e1a')).catch(()=>{});
+  idx++; render();
+};
+document.getElementById('undo').onclick = () => {
+  if (!undoStack.length) return;
+  const u = undoStack.pop();
+  idx = u.idx; times.pop();
+  _fbWrite(u.pk, { match_status: 'unreviewed', selected_candidate_idx: null, selected_candidate: null, display_price: null, not_a_pin: null })
+    .then(() => _fbToast('Undone', '#555')).catch(()=>{});
+  render();
+};
+
+function finish() {
+  document.getElementById('stage').style.display = 'none';
+  document.getElementById('btns').style.display = 'none';
+  document.getElementById('done').style.display = 'block';
+  document.getElementById('done').innerHTML = '<h2>Done</h2><p>Reviewed '+times.length+' pins.</p>';
+}
+
+async function boot() {
+  try {
+    const r = await fetch('ui_pins.json');
+    if (!r.ok) throw new Error('HTTP '+r.status);
+    PINS = ((await r.json()).pins) || [];
+  } catch (e) {
+    document.getElementById('loaderr').style.display = 'block';
+    return;
+  }
+  try {
+    const fb = await _fbReadAllPins();
+    PINS = PINS.filter(p => {
+      const k = p.pk.replace(/[^A-Za-z0-9_-]/g, '_');
+      const ent = fb[k] || fb[p.pk];
+      const ms = ent && ent.match_status;
+      return !ms || ms === 'unreviewed';
+    });
+  } catch (e) {}
+  document.getElementById('total').textContent = PINS.length;
+  document.getElementById('stage').style.display = 'block';
+  document.getElementById('btns').style.display = 'flex';
+  render();
+}
+boot();</script>
+</body>
+</html>
