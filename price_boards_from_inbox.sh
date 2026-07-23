@@ -536,8 +536,10 @@ copy_run_to_publish_repo() {
 }
 
 # Best-effort mirror of finished run into iCloud PREP (not used for RF-DETR reads).
+# Off by default (PRICE_MIRROR_ICLOUD_PREP=0) — Lexi uses GitHub Pages; avoid iCloud write storms.
 mirror_run_to_icloud_prep() {
   local src="${COL_DIR}" dest="${PREP}/${NEWNAME}"
+  [[ "${PRICE_MIRROR_ICLOUD_PREP:-0}" == "1" ]] || return 0
   [[ -d "$src" ]] || return 0
   [[ "$src" == "$dest" ]] && return 0
   mkdir -p "$dest"

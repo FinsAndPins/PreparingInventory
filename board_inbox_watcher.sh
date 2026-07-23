@@ -24,8 +24,10 @@
 #   PIN_PRICING_RFDETR_MIN_CONF — optional; default 0.25 (matches Click To Collect app).
 #   LOCAL_WATCHER_BIN     if set, directory with copies of this script, price_boards_from_inbox.sh,
 #                           and lexi_send_imessage.py (launchd cannot run scripts from iCloud paths).
-#   BOARD_INBOX_DIR       optional local folder mirroring BoardsToPrice (set by LaunchAgent launcher);
-#                           ditto from iCloud BoardsToPrice each poll so launchd can see files; pricing still runs on PREP.
+#   BOARD_INBOX_DIR       local mirror of iCloud BoardsToPrice (LaunchAgent). Hybrid model:
+#                           Lexi drops in iCloud BoardsToPrice → watcher materializes into this local
+#                           folder → price_boards runs RF-DETR/eBay on local PricingWork (not iCloud).
+#                           Results publish from PreparingInventoryGit → Lexi reviews on GitHub Pages.
 #
 set -uo pipefail
 set +H
@@ -118,14 +120,31 @@ _icloud_request_download() {
   fi
 }
 
-# Copy one board photo from iCloud → local mirror; wait until bytes are present (not a CloudDocs stub).
+# Copy one board photo from iCloud → local mirror via Python read/write (forces materialize).
+# Avoid /bin/cp and ditto here: under launchd they often create 0-byte stubs or errno 11.
 _pull_single_board_file() {
   local src="${1:?}" dest="${2:?}"
   local attempt
   for attempt in 1 2 3 4 5 6 7 8 9 10; do
     _icloud_request_download "$src"
-    rm -f "$dest" 2>/dev/null || true
-    if /bin/cp -f "$src" "$dest" 2>/dev/null || /usr/bin/ditto "$src" "$dest" 2>/dev/null; then
+    if BRIDGE_SRC="$src" BRIDGE_DEST="$dest" BRIDGE_MIN="${BOARD_MIN_BYTES}" /usr/bin/python3 - <<'PY' 2>/dev/null
+import os, sys
+from pathlib import Path
+src, dest = Path(os.environ["BRIDGE_SRC"]), Path(os.environ["BRIDGE_DEST"])
+min_b = int(os.environ.get("BRIDGE_MIN", "1024"))
+try:
+    data = src.read_bytes()
+except OSError:
+    sys.exit(1)
+if len(data) < min_b:
+    sys.exit(1)
+dest.parent.mkdir(parents=True, exist_ok=True)
+tmp = dest.with_suffix(dest.suffix + ".tmp")
+tmp.write_bytes(data)
+tmp.replace(dest)
+sys.exit(0)
+PY
+    then
       if _board_file_bytes_ok "$dest"; then
         return 0
       fi
@@ -136,11 +155,9 @@ _pull_single_board_file() {
   return 1
 }
 
-# Pull canonical iCloud BoardsToPrice → local mirror so launchd can see uploads.
-# - Do NOT use rsync for the whole folder: on CloudDocs placeholders it often fails with
-#   "mmap: Resource deadlock avoided" while files are still evicted / downloading.
-# - ditto copies without rsync's mmap path; no --delete (never wipe mirror on partial read).
-# - If ditto fails, retry then per-file cp/ditto fallback (launchd often cannot ditto iCloud stubs).
+# Pull canonical iCloud BoardsToPrice → local mirror (hybrid: iCloud = Lexi drop only).
+# Per-file Python materialize only — no folder-level ditto/rsync (those spam errno 11 under launchd).
+# Never --delete the mirror on a partial iCloud read.
 bridge_pull_icloud_inbox_to_scan_dir() {
   [[ -n "${BOARD_INBOX_DIR:-}" ]] || return 0
   mkdir -p "${BOARD_INBOX_DIR}"
@@ -148,45 +165,33 @@ bridge_pull_icloud_inbox_to_scan_dir() {
   if [[ ! -d "$src" ]]; then
     return 0
   fi
-  local out ec=0 attempt f
-  for attempt in 1 2 3 4 5; do
-    ec=0
-    out=$(/usr/bin/ditto "$src/" "${BOARD_INBOX_DIR}/" 2>&1) || ec=$?
-    if [[ "$ec" -eq 0 ]]; then
-      local need_retry=0 dest
-      while IFS= read -r -d '' f; do
-        dest="${BOARD_INBOX_DIR}/$(basename "$f")"
-        if [[ -f "$dest" ]] && _board_file_bytes_ok "$dest"; then
-          continue
-        fi
-        need_retry=1
-        _pull_single_board_file "$f" "$dest" || true
-      done < <(find "$src" -maxdepth 1 -type f \
-        \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \
-        -o -iname '*.heic' -o -iname '*.heif' \
-        -o -iname '*.webp' -o -iname '*.tif' -o -iname '*.tiff' \) \
-        ! -name '.gitkeep' ! -name '.DS_Store' -print0 2>/dev/null)
-      if [[ "$need_retry" -eq 0 ]]; then
-        return 0
-      fi
-      echo "[$(date -Iseconds)] WARN bridge_pull: ditto ok but mirror still has stub(s); retried per-file pull"
-      return 0
-    fi
-    if [[ "$attempt" -lt 5 ]]; then
-      echo "[$(date -Iseconds)] WARN bridge_pull: ditto exit ${ec} (attempt ${attempt}/5): ${out}"
-      sleep 2
-    fi
-  done
-  echo "[$(date -Iseconds)] WARN bridge_pull: ditto exit ${ec} after 5 tries: ${out}; per-file copy fallback"
+  local f dest n_ok=0 n_fail=0
   while IFS= read -r -d '' f; do
     [[ -f "$f" ]] || continue
-    local dest="${BOARD_INBOX_DIR}/$(basename "$f")"
-    _pull_single_board_file "$f" "$dest" || true
+    dest="${BOARD_INBOX_DIR}/$(basename "$f")"
+    if [[ -f "$dest" ]] && _board_file_bytes_ok "$dest"; then
+      # Same basename+size already local — skip re-copy.
+      local src_sz dest_sz
+      src_sz=$(stat -f %z "$f" 2>/dev/null || echo 0)
+      dest_sz=$(stat -f %z "$dest" 2>/dev/null || echo 0)
+      if [[ "$src_sz" -gt 0 && "$src_sz" == "$dest_sz" ]]; then
+        n_ok=$((n_ok + 1))
+        continue
+      fi
+    fi
+    if _pull_single_board_file "$f" "$dest"; then
+      n_ok=$((n_ok + 1))
+    else
+      n_fail=$((n_fail + 1))
+    fi
   done < <(find "$src" -maxdepth 1 -type f \
     \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \
     -o -iname '*.heic' -o -iname '*.heif' \
     -o -iname '*.webp' -o -iname '*.tif' -o -iname '*.tiff' \) \
     ! -name '.gitkeep' ! -name '.DS_Store' -print0 2>/dev/null)
+  if [[ "$n_fail" -gt 0 ]]; then
+    echo "[$(date -Iseconds)] WARN bridge_pull: materialized ${n_ok} board(s), ${n_fail} still unavailable from iCloud"
+  fi
 }
 
 _pin_venv_ready() {

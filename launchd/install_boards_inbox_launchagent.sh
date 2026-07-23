@@ -10,7 +10,35 @@ BOARD_INBOX="${HOME}/Library/Application Support/FinsAndPins/PreparingInventoryB
 LAUNCHER="${HOME}/Library/Application Support/FinsAndPins/board_inbox_watcher_launcher.sh"
 AGENT="${HOME}/Library/LaunchAgents/com.finsandpins.BoardsInboxWatcher.plist"
 
-mkdir -p "${PREP}/_logs" "${BIN}/_logs" "${BOARD_INBOX}" "$(dirname "$LAUNCHER")"
+KEYS_DIR="${HOME}/Library/Application Support/FinsAndPins/keys"
+PIPELINE_WORK="${HOME}/Library/Application Support/FinsAndPins/PricingWork"
+mkdir -p "${PREP}/_logs" "${BIN}/_logs" "${BOARD_INBOX}" "$(dirname "$LAUNCHER")" \
+  "${KEYS_DIR}/.backup" "${PIPELINE_WORK}"
+# Keep a durable local ebay_keys backup (hybrid model — never rely on live iCloud reads under launchd).
+if [[ -s "${KEYS_DIR}/ebay_keys.json" ]]; then
+  /bin/cp -f "${KEYS_DIR}/ebay_keys.json" "${KEYS_DIR}/.backup/ebay_keys.json" 2>/dev/null || true
+  chmod 600 "${KEYS_DIR}/.backup/ebay_keys.json" 2>/dev/null || true
+elif [[ -s "${HOME}/Library/Mobile Documents/com~apple~CloudDocs/Minimal folder for Claude/ebay_keys.json" ]]; then
+  /usr/bin/python3 - <<PY || true
+from pathlib import Path
+src = Path.home() / "Library/Mobile Documents/com~apple~CloudDocs/Minimal folder for Claude/ebay_keys.json"
+dest = Path.home() / "Library/Application Support/FinsAndPins/keys/ebay_keys.json"
+bak = dest.parent / ".backup" / "ebay_keys.json"
+try:
+    data = src.read_bytes()
+except OSError as e:
+    print(f"WARN: could not read iCloud ebay_keys.json: {e}")
+    raise SystemExit(0)
+if data:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    bak.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(data)
+    bak.write_bytes(data)
+    dest.chmod(0o600)
+    bak.chmod(0o600)
+    print(f"Seeded local ebay_keys.json ({len(data)} bytes) + backup")
+PY
+fi
 
 PIN_LOCAL="${HOME}/Library/Application Support/FinsAndPins/PinPricingStudyMVP_RFDETR_TEST"
 PIN_SRC="${HOME}/Library/Mobile Documents/com~apple~CloudDocs/Cursor Projects/PinPricingStudyMVP_RFDETR_TEST"

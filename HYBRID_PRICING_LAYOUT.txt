@@ -1,0 +1,47 @@
+Hybrid pricing layout (permanent) — Fins & Pins
+================================================
+
+Goal: Lexi keeps using iCloud for uploads; the Mac never runs RF-DETR / eBay /
+key reads against iCloud paths under launchd (those hit errno 11 Resource
+deadlock avoided).
+
+Paths
+-----
+Lexi drop zone (iCloud only):
+  …/GitHub PreparingInventory/PreparingInventory/BoardsToPrice/
+
+Local mirror (watcher sees this):
+  ~/Library/Application Support/FinsAndPins/PreparingInventoryBoardsInbox/
+
+Local pipeline work (RF-DETR + eBay + harness build):
+  ~/Library/Application Support/FinsAndPins/PricingWork/
+
+Local API keys (+ .backup, never delete):
+  ~/Library/Application Support/FinsAndPins/keys/
+  ~/Library/Application Support/FinsAndPins/keys/.backup/
+
+Local publish git clone → GitHub Pages (Lexi review UI):
+  ~/Library/Application Support/FinsAndPins/PreparingInventoryGit/
+
+Watcher scripts (launchd-executable copies):
+  ~/Library/Application Support/FinsAndPins/PreparingInventoryWatcherBin/
+  ~/Library/Application Support/FinsAndPins/board_inbox_watcher_launcher.sh
+
+Flow
+----
+1. Lexi drops board photos into iCloud BoardsToPrice.
+2. Watcher materializes each file into the local BoardsInbox (Python read/write).
+3. After 120s quiet, boards move into PricingWork/PriceCollection_YYYYMMDD_HHMM.
+4. Pipeline runs entirely on local disk; keys loaded from App Support (+backup).
+5. Finished harness is copied into PreparingInventoryGit and pushed.
+6. Lexi opens the GitHub Pages harness URL (iMessage notify).
+
+Do not
+------
+- Point RF-DETR at iCloud _staged_boards.
+- Fall back to iCloud for ebay_keys.json under launchd.
+- Delete keys/.backup/.
+- Expect folder-level ditto/rsync of BoardsToPrice to always work under launchd.
+
+Re-install / refresh copies after script edits:
+  PreparingInventoryGit/launchd/install_boards_inbox_launchagent.sh
