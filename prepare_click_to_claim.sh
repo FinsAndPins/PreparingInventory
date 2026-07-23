@@ -16,7 +16,11 @@ set -euo pipefail
 set +H
 
 PREP="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
-CTR_REQUEST_ROOT="${HOME}/Library/Mobile Documents/com~apple~CloudDocs/ClickToRequest"
+# Canonical Lexi/Steve drop zone (iCloud). Prefer env from launchd launcher when set.
+CTR_REQUEST_ROOT="${CTR_REQUEST_ROOT:-${HOME}/Library/Mobile Documents/com~apple~CloudDocs/ClickToRequest}"
+# Optional local mirror / explicit input (launchd-safe RF-DETR reads).
+CTR_MIRROR_DIR="${CTR_MIRROR_DIR:-}"
+CTR_INPUT_DIR="${CTR_INPUT_DIR:-}"
 CTR_REPO="${HOME}/Library/Mobile Documents/com~apple~CloudDocs/GitHub Repository/ClickToClaim"
 FINS_LOCAL="${HOME}/Library/Application Support/FinsAndPins"
 PIN_DIR_ICLOUD="${HOME}/Library/Mobile Documents/com~apple~CloudDocs/Cursor Projects/PinPricingStudyMVP_RFDETR_TEST"
@@ -79,6 +83,8 @@ discover_input_show() {
 }
 
 find_highest_template_show() {
+  # Only use shows committed on HEAD so stray local folders (untracked WIP)
+  # cannot become the bootstrap template.
   local best=""
   local best_num=0
   local name d num
@@ -88,6 +94,9 @@ find_highest_template_show() {
     name="$(basename "$d")"
     is_yyyymmdd "$name" || continue
     [[ -f "${d}index.html" ]] || continue
+    if ! git -C "$CTR_REPO" cat-file -e "HEAD:${name}/index.html" 2>/dev/null; then
+      continue
+    fi
     num=$((10#$name))
     if (( num > best_num )); then
       best_num=$num
@@ -96,7 +105,7 @@ find_highest_template_show() {
   done
   shopt -u nullglob
   if [[ -z "$best" ]]; then
-    die "No dated show template with index.html found under ${CTR_REPO}/"
+    die "No dated show template with index.html found under ${CTR_REPO}/ (committed on HEAD)"
   fi
   echo "$best"
 }
@@ -215,22 +224,73 @@ commit_and_push() {
     die "Nothing staged to commit (unexpected after detect)"
   fi
 
-  git commit -m "Add ClickToClaim show ${show_id} (RF-DETR boards from ClickToRequest)."
+  # ClickToClaim lives under iCloud; git commit can fail with
+  # "could not open '.git/COMMIT_EDITMSG': Resource deadlock avoided".
+  local commit_msg="Add ClickToClaim show ${show_id} (RF-DETR boards from ClickToRequest)."
+  local attempt=1
+  local max_attempts=6
+  local commit_err=""
+  local committed=0
+  while (( attempt <= max_attempts )); do
+    if commit_err=$(git commit -m "$commit_msg" 2>&1); then
+      committed=1
+      log "Committed on attempt ${attempt}."
+      break
+    fi
+    if echo "$commit_err" | grep -qiE 'deadlock|Resource deadlock|COMMIT_EDITMSG'; then
+      log "WARN: git commit hit iCloud/fs contention (attempt ${attempt}/${max_attempts}): ${commit_err}"
+      sleep $(( attempt * 2 ))
+      attempt=$((attempt + 1))
+      continue
+    fi
+    log "ERROR: git commit failed: ${commit_err}"
+    die "git commit failed"
+  done
+  if (( committed != 1 )); then
+    die "git commit failed after ${max_attempts} attempts (iCloud deadlock on .git). Boards are ready under ${show_id}/ — re-drop or re-run prepare to finish commit/push only."
+  fi
+
   log "Committed. Pushing origin main…"
-  git push origin main
+  attempt=1
+  local push_err=""
+  local pushed=0
+  while (( attempt <= max_attempts )); do
+    if push_err=$(git push origin main 2>&1); then
+      pushed=1
+      log "Push complete on attempt ${attempt}."
+      break
+    fi
+    log "WARN: git push failed (attempt ${attempt}/${max_attempts}): ${push_err}"
+    sleep $(( attempt * 2 ))
+    attempt=$((attempt + 1))
+  done
+  if (( pushed != 1 )); then
+    die "git push failed after ${max_attempts} attempts. Commit is local — push manually or re-run prepare recovery."
+  fi
   log "Push complete."
 }
 
 # --- main ---
 
 SHOW_ID="$(discover_input_show)"
-INPUT_DIR="${CTR_REQUEST_ROOT}/${SHOW_ID}"
+# Prefer local mirror / CTR_INPUT_DIR for detection (avoid iCloud errno 11 mid RF-DETR).
+if [[ -n "${CTR_INPUT_DIR:-}" ]] && [[ -d "${CTR_INPUT_DIR}" ]]; then
+  INPUT_DIR="${CTR_INPUT_DIR}"
+elif [[ -n "${CTR_MIRROR_DIR:-}" ]] && [[ -d "${CTR_MIRROR_DIR}/${SHOW_ID}" ]]; then
+  INPUT_DIR="${CTR_MIRROR_DIR}/${SHOW_ID}"
+else
+  INPUT_DIR="${CTR_REQUEST_ROOT}/${SHOW_ID}"
+fi
+ICLOUD_INPUT_DIR="${CTR_REQUEST_ROOT}/${SHOW_ID}"
 TARGET_DIR="${CTR_REPO}/${SHOW_ID}"
 BOARDS_DIR="${TARGET_DIR}/boards"
 LOG_FILE="${LOG_DIR}/${SHOW_ID}-ctr.log"
 
 log "=== PrepareClickToClaim show ${SHOW_ID} ==="
 log "Input:  ${INPUT_DIR}"
+if [[ "$INPUT_DIR" != "$ICLOUD_INPUT_DIR" ]]; then
+  log "iCloud drop zone: ${ICLOUD_INPUT_DIR}"
+fi
 log "Output: ${TARGET_DIR}"
 log "Log:    ${LOG_FILE}"
 
@@ -244,43 +304,57 @@ if [[ "$PHOTO_COUNT" -eq 0 ]]; then
 fi
 log "Found ${PHOTO_COUNT} input photo(s)"
 
+LIVE_URL="${LIVE_BASE}/${SHOW_ID}/"
+RECOVERY_COMMIT_ONLY=0
 if has_board_outputs "$TARGET_DIR"; then
-  die "Refusing to overwrite existing board outputs in ${BOARDS_DIR}"
+  if git -C "$CTR_REPO" cat-file -e "HEAD:${SHOW_ID}/boards/manifest.json" 2>/dev/null; then
+    die "Refusing to overwrite existing board outputs in ${BOARDS_DIR}"
+  fi
+  # Boards finished previously but commit/push failed (e.g. iCloud deadlock).
+  log "Recovering: board outputs exist locally but ${SHOW_ID} is not on HEAD — commit/push only"
+  RECOVERY_COMMIT_ONLY=1
 fi
 
 TEMPLATE_ID="$(find_highest_template_show)"
 log "Template show: ${TEMPLATE_ID}"
 
 if [[ "${DRY_RUN:-0}" == "1" ]]; then
-  log "DRY_RUN=1 — would bootstrap from ${TEMPLATE_ID}, detect ${PHOTO_COUNT} photos, commit ${SHOW_ID}/ + shows_index.json"
+  if [[ "$RECOVERY_COMMIT_ONLY" == "1" ]]; then
+    log "DRY_RUN=1 — would commit/push existing ${SHOW_ID}/ + shows_index.json (recovery)"
+  else
+    log "DRY_RUN=1 — would bootstrap from ${TEMPLATE_ID}, detect ${PHOTO_COUNT} photos, commit ${SHOW_ID}/ + shows_index.json"
+  fi
   log "Live URL would be: ${LIVE_BASE}/${SHOW_ID}/"
   exit 0
 fi
 
-preflight_rfdetr
+if [[ "$RECOVERY_COMMIT_ONLY" != "1" ]]; then
+  preflight_rfdetr
 
-if [[ ! -f "${TARGET_DIR}/index.html" ]] || [[ ! -f "${TARGET_DIR}/reports.html" ]]; then
-  bootstrap_show "$TEMPLATE_ID" "$SHOW_ID"
+  if [[ ! -f "${TARGET_DIR}/index.html" ]] || [[ ! -f "${TARGET_DIR}/reports.html" ]]; then
+    bootstrap_show "$TEMPLATE_ID" "$SHOW_ID"
+  else
+    log "Show folder exists without board outputs — patching Firebase slug and ensuring promo asset"
+    ensure_collection_detection_promo_asset "$TARGET_DIR" "${CTR_REPO}/${TEMPLATE_ID}"
+    python3 "$PATCH_PY" "$TARGET_DIR" "$SHOW_ID"
+  fi
+
+  mkdir -p "$BOARDS_DIR"
+
+  log "Running RF-DETR detect (${PHOTO_COUNT} photos)…"
+  python3 "$DETECT_PY" \
+    --input-dir "$INPUT_DIR" \
+    --output-dir "$BOARDS_DIR" \
+    --pin-pricing-rfdetr-dir "$PIN_DIR" \
+    --min-conf "${PIN_PRICING_RFDETR_MIN_CONF:-0.25}"
+
+  log "Validating board outputs…"
+  python3 "$VALIDATE_PY" --boards-dir "$BOARDS_DIR" --input-dir "$INPUT_DIR"
+
+  log "Boards ready. Live URL (after push): ${LIVE_URL}"
 else
-  log "Show folder exists without board outputs — patching Firebase slug and ensuring promo asset"
-  ensure_collection_detection_promo_asset "$TARGET_DIR" "${CTR_REPO}/${TEMPLATE_ID}"
-  python3 "$PATCH_PY" "$TARGET_DIR" "$SHOW_ID"
+  log "Skipping detect (recovery). Live URL (after push): ${LIVE_URL}"
 fi
-
-mkdir -p "$BOARDS_DIR"
-
-log "Running RF-DETR detect (${PHOTO_COUNT} photos)…"
-python3 "$DETECT_PY" \
-  --input-dir "$INPUT_DIR" \
-  --output-dir "$BOARDS_DIR" \
-  --pin-pricing-rfdetr-dir "$PIN_DIR" \
-  --min-conf "${PIN_PRICING_RFDETR_MIN_CONF:-0.25}"
-
-log "Validating board outputs…"
-python3 "$VALIDATE_PY" --boards-dir "$BOARDS_DIR" --input-dir "$INPUT_DIR"
-
-LIVE_URL="${LIVE_BASE}/${SHOW_ID}/"
-log "Boards ready. Live URL (after push): ${LIVE_URL}"
 
 if [[ "${SKIP_GIT:-0}" == "1" ]]; then
   ensure_collection_detection_promo_asset "$TARGET_DIR" "${CTR_REPO}/${TEMPLATE_ID}" || true

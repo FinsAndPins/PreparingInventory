@@ -17,7 +17,9 @@
 #   CTR_FAIL_COOLDOWN_SEC    default 3600 — after a failed run, wait before auto-retry
 #   CTR_MIN_BYTES            default 1024 — ignore iCloud placeholder stubs smaller than this
 #   LOCAL_CTR_WATCHER_BIN    local copies of scripts (launchd cannot execute under iCloud)
-#   CTR_MIRROR_DIR           local mirror of ClickToRequest (set by LaunchAgent launcher)
+#   CTR_MIRROR_DIR           local mirror of ClickToRequest (set by LaunchAgent launcher).
+#                            Hybrid: Lexi/Steve drop in iCloud ClickToRequest; watcher materializes
+#                            into this local folder; prepare_click_to_claim RF-DETR reads from mirror.
 #   CTR_REQUEST_ROOT         override ClickToRequest root (default: iCloud path below)
 #
 set -uo pipefail
@@ -132,8 +134,24 @@ _pull_single_photo() {
   local attempt
   for attempt in 1 2 3 4 5 6 7 8 9 10; do
     _icloud_request_download "$src"
-    rm -f "$dest" 2>/dev/null || true
-    if /bin/cp -f "$src" "$dest" 2>/dev/null || /usr/bin/ditto "$src" "$dest" 2>/dev/null; then
+    if CTR_PULL_SRC="$src" CTR_PULL_DEST="$dest" CTR_PULL_MIN="${PHOTO_MIN_BYTES}" /usr/bin/python3 - <<'PY' 2>/dev/null
+import os, sys
+from pathlib import Path
+src, dest = Path(os.environ["CTR_PULL_SRC"]), Path(os.environ["CTR_PULL_DEST"])
+min_b = int(os.environ.get("CTR_PULL_MIN", "1024"))
+try:
+    data = src.read_bytes()
+except OSError:
+    sys.exit(1)
+if len(data) < min_b:
+    sys.exit(1)
+dest.parent.mkdir(parents=True, exist_ok=True)
+tmp = dest.with_suffix(dest.suffix + ".tmp")
+tmp.write_bytes(data)
+tmp.replace(dest)
+sys.exit(0)
+PY
+    then
       if _photo_bytes_ok "$dest"; then
         return 0
       fi
@@ -144,37 +162,43 @@ _pull_single_photo() {
   return 1
 }
 
-# Mirror iCloud ClickToRequest → local CTR_MIRROR_DIR so launchd can see uploads.
+# Mirror iCloud ClickToRequest → local CTR_MIRROR_DIR (hybrid: iCloud = drop zone only).
+# Per-file Python materialize only — no folder-level ditto/rsync (errno 11 under launchd).
 bridge_pull_icloud_to_mirror() {
   [[ -n "${CTR_MIRROR_DIR:-}" ]] || return 0
   mkdir -p "${CTR_MIRROR_DIR}"
   if [[ ! -d "${CTR_REQUEST_ROOT}" ]]; then
     return 0
   fi
-  local show_dir name src dest ec=0 attempt out
+  local show_dir name src dest f n_ok n_fail src_sz dest_sz
   while IFS= read -r show_dir; do
     [[ -n "$show_dir" ]] || continue
     name="$(basename "$show_dir")"
     dest="${CTR_MIRROR_DIR}/${name}"
     mkdir -p "$dest"
     src="${CTR_REQUEST_ROOT}/${name}"
-    for attempt in 1 2 3 4 5; do
-      ec=0
-      out=$(/usr/bin/ditto "$src/" "${dest}/" 2>&1) || ec=$?
-      if [[ "$ec" -eq 0 ]]; then
-        break
-      fi
-      if [[ "$attempt" -lt 5 ]]; then
-        echo "[$(date -Iseconds)] WARN bridge_pull: ditto ${name} exit ${ec} (attempt ${attempt}/5): ${out}"
-        sleep 2
-      else
-        echo "[$(date -Iseconds)] WARN bridge_pull: ditto ${name} exit ${ec} after 5 tries: ${out}; per-file fallback"
-      fi
-    done
-    local f
+    n_ok=0
+    n_fail=0
     while IFS= read -r -d '' f; do
-      _pull_single_photo "$f" "${dest}/$(basename "$f")" || true
+      [[ -f "$f" ]] || continue
+      local_dest="${dest}/$(basename "$f")"
+      if [[ -f "$local_dest" ]] && _photo_bytes_ok "$local_dest"; then
+        src_sz=$(stat -f %z "$f" 2>/dev/null || echo 0)
+        dest_sz=$(stat -f %z "$local_dest" 2>/dev/null || echo 0)
+        if [[ "$src_sz" -gt 0 && "$src_sz" == "$dest_sz" ]]; then
+          n_ok=$((n_ok + 1))
+          continue
+        fi
+      fi
+      if _pull_single_photo "$f" "$local_dest"; then
+        n_ok=$((n_ok + 1))
+      else
+        n_fail=$((n_fail + 1))
+      fi
     done < <(_find_photo_files_in "$src" -print0)
+    if [[ "$n_fail" -gt 0 ]]; then
+      echo "[$(date -Iseconds)] WARN bridge_pull: ${name} materialized ${n_ok} photo(s), ${n_fail} still unavailable from iCloud"
+    fi
   done < <(_find_dated_show_dirs_in "${CTR_REQUEST_ROOT}")
   prune_stale_mirror_show_dirs
 }
@@ -343,7 +367,12 @@ ctr_preflight() {
 run_ctr_pipeline() {
   local show_id="${1:?}"
   ctr_preflight "$show_id" || return $?
-  PREP="$PREP" /usr/bin/caffeinate -dimsu -- /bin/bash "$CTR_SCRIPT"
+  # Prefer local mirror for RF-DETR reads (same hybrid idea as pricing PricingWork).
+  PREP="$PREP" \
+    CTR_REQUEST_ROOT="${CTR_REQUEST_ROOT}" \
+    CTR_MIRROR_DIR="${CTR_MIRROR_DIR:-}" \
+    CTR_INPUT_DIR="${CTR_MIRROR_DIR:+${CTR_MIRROR_DIR}/${show_id}}" \
+    /usr/bin/caffeinate -dimsu -- /bin/bash "$CTR_SCRIPT"
 }
 
 acquire_lock() {
