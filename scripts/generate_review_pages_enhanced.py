@@ -707,7 +707,9 @@ document.getElementById('btn-notpin').addEventListener('click', () => {
   try {
     _fbWrite(p.pk, {
       match_status: 'not_a_pin',
+      not_a_pin: true,
       display_price: 0,
+      ladder_preserve_zero: true,
       marked_not_a_pin_at: new Date().toISOString(),
     });
   } catch(e) { console.warn('not-a-pin write failed', e); }
@@ -1166,6 +1168,7 @@ function markNotAPin(p) {
   _fbWrite(p.pk, {
     display_price: 0,
     not_a_pin: true,
+    ladder_preserve_zero: true,
     slot_reviewed_at: new Date().toISOString(),
     match_status: 'not_a_pin'
   });

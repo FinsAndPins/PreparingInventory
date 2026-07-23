@@ -126,7 +126,7 @@
     <button class="btn" id="navBatch">Batch Review</button>
     <span class="pill" id="runPill"></span>
     <label class="pill" style="display:flex;align-items:center;gap:8px;margin:0;font-weight:normal"><span style="font-size:12px;opacity:.9">Name</span><input id="ctpUserInput" type="text" autocomplete="username" placeholder="you" style="width:min(140px,30vw);padding:5px 8px;border-radius:8px;border:1px solid #2a2a33;background:#0f0f12;color:#eee;font-size:13px" title="Saved in this browser (no popup)"/></label>
-    <label class="pill" style="display:flex;align-items:center;gap:8px;margin:0;font-weight:normal" title="When on, pin badges and headers use rounding rules ($10 min, nearest $5). Stored list prices stay raw eBay. If Lexi sets price to $0 (bad crop), preview stays $0; pipeline $0 unchanged still ladders to $10.">
+    <label class="pill" style="display:flex;align-items:center;gap:8px;margin:0;font-weight:normal" title="When on, pin badges and headers use rounding rules ($10 min, nearest $5). Stored list prices stay raw eBay. Not a Pin stays $0 and is excluded from pin counts / W totals. If Lexi sets price to $0 (bad crop), preview stays $0; pipeline $0 unchanged still ladders to $10.">
       <input type="checkbox" id="ctpWhatnotPreviewChk"/>
       <span style="font-size:12px">Apply rounding rules</span>
     </label>
@@ -444,12 +444,18 @@
       if (!Number.isFinite(n)) return 0;
       return Math.round(n);
     }
+    /** Not-a-Pin detections stay $0 and are excluded from pin counts / Whatnot sums. */
+    function isNotAPin(p) {
+      return !!(p && (p.not_a_pin === true || p.match_status === "not_a_pin"));
+    }
     /**
      * Whatnot upload ladder (display-only when preview is on): min $10, nearest $5.
-     * Exception: if Lexi explicitly sets list price to $0 (partial/wrong crop), preserve $0 in preview
-     * when pin.ladder_preserve_zero is true. Pipeline/listing-sourced $0 keeps normal ladder (min $10).
+     * Exceptions that stay $0: Not a Pin; or Lexi explicitly sets list price to $0
+     * (partial/wrong crop) when pin.ladder_preserve_zero is true.
+     * Pipeline/listing-sourced $0 (without those flags) still ladders to min $10.
      */
     function whatnotLadderPrice(v, pin) {
+      if (isNotAPin(pin)) return 0;
       const n = Math.round(Number(v));
       if (!Number.isFinite(n)) return 10;
       if (n === 0 && pin && pin.ladder_preserve_zero) return 0;
@@ -509,10 +515,10 @@
       });
     }
     function sumRawListPrices(plist) {
-      return roundMoney2((plist || []).reduce((a, p) => a + roundMoney2(p.display_price), 0));
+      return roundMoney2((plist || []).filter((p) => !isNotAPin(p)).reduce((a, p) => a + roundMoney2(p.display_price), 0));
     }
     function sumWhatnotLadderPrices(plist) {
-      return (plist || []).reduce((a, p) => a + whatnotLadderPrice(roundMoney2(p.display_price), p), 0);
+      return (plist || []).filter((p) => !isNotAPin(p)).reduce((a, p) => a + whatnotLadderPrice(roundMoney2(p.display_price), p), 0);
     }
     function globalRawTotal() {
       return roundMoney2((payload.boards || []).reduce((t, b) => t + sumRawListPrices(b.pins), 0));
@@ -523,7 +529,7 @@
     function pinDomId(pinKey) { return (""+pinKey).replace(/[^A-Za-z0-9_-]/g, "_"); }
     function pinByKey(k) { return pins.find(p => p.pin_key === k); }
     function pinByKeyInView(view, k) { return (view || []).find(p => p.pin_key === k); }
-    function isFinalStatus(s) { return s === "match" || s === "no_match"; }
+    function isFinalStatus(s) { return s === "match" || s === "no_match" || s === "not_a_pin"; }
     function ctpFilterStatus(p) {
       if (window.ctpStatusFilter === "match") return p.match_status === "match";
       if (window.ctpStatusFilter === "no_match") return p.match_status === "no_match";
@@ -911,7 +917,7 @@
       payload.global_pin_count = 0;
       payload.global_total_value = 0;
       for (const b of payload.boards) {
-        const plist = b.pins || [];
+        const plist = (b.pins || []).filter((p) => !isNotAPin(p));
         b.pin_count = plist.length;
         b.board_total_value = roundMoney2(plist.reduce((a,p)=>a+roundMoney2(p.display_price),0));
         payload.global_pin_count += b.pin_count;
@@ -927,6 +933,7 @@
         selected_candidate_idx: pin.selected_candidate_idx ?? 0,
         match_status: String(pin.match_status || "unreviewed"),
         ladder_preserve_zero: !!pin.ladder_preserve_zero,
+        not_a_pin: isNotAPin(pin),
       };
     }
     function describePinDiff(prev, cur) {
@@ -946,6 +953,9 @@
       if (!!prev.ladder_preserve_zero !== !!cur.ladder_preserve_zero) {
         parts.push("preserve0 " + (prev.ladder_preserve_zero ? "on" : "off") + "→" + (cur.ladder_preserve_zero ? "on" : "off"));
       }
+      if (!!prev.not_a_pin !== !!cur.not_a_pin) {
+        parts.push("not_a_pin " + (prev.not_a_pin ? "on" : "off") + "→" + (cur.not_a_pin ? "on" : "off"));
+      }
       return parts.join("; ");
     }
     function firebaseWritePin(pin) {
@@ -958,6 +968,7 @@
       const last_edit = diff
         ? { user, changes: diff, ts: Date.now() }
         : null;
+      const nap = isNotAPin(pin);
       const row = {
         user,
         ts: firebase.database.ServerValue.TIMESTAMP,
@@ -965,13 +976,14 @@
         board_num: String(pin.board_num || ""),
         crop_filename: pin.crop_filename,
         pin_n: pin.pin_n,
-        match_status: String(pin.match_status || "unreviewed"),
+        match_status: nap ? "not_a_pin" : String(pin.match_status || "unreviewed"),
         selected_candidate_idx: pin.selected_candidate_idx ?? 0,
         selected_candidate: c,
-        display_price: roundMoney2(Number(pin.display_price || 0)),
+        display_price: nap ? 0 : roundMoney2(Number(pin.display_price || 0)),
         listing_title: String(pin.listing_title || ""),
-        ladder_preserve_zero: !!pin.ladder_preserve_zero,
+        ladder_preserve_zero: nap ? true : !!pin.ladder_preserve_zero,
       };
+      if (nap) row.not_a_pin = true;
       if (last_edit) row.last_edit = last_edit;
       ref.set(row).then(() => {
         pin._lastSaved = snapshotPinState(pin);
@@ -1700,6 +1712,7 @@
       if (!rec || !rec.pin_key) return false;
       const p = pinByKey(rec.pin_key);
       if (!p) return false;
+      const napFromRec = rec.not_a_pin === true || rec.match_status === "not_a_pin";
       if (Object.prototype.hasOwnProperty.call(rec, "selected_candidate_idx")) {
         p._fbHasListingPick = (typeof rec.selected_candidate_idx === "number");
       }
@@ -1710,7 +1723,8 @@
           : 0;
         if ((p.candidates || [])[idx]) Object.assign((p.candidates || [])[idx], rec.selected_candidate);
       }
-      if (typeof rec.selected_candidate_idx === "number") {
+      // Do not apply a listing pick for Not-a-Pin (would clear $0 / preserve-zero flags).
+      if (!napFromRec && typeof rec.selected_candidate_idx === "number" && rec.selected_candidate_idx >= 0) {
         const idx = Math.max(0, Math.min((p.candidates || []).length - 1, rec.selected_candidate_idx));
         chooseCandidate(p, idx);
       }
@@ -1723,10 +1737,20 @@
       if (rec.board_num !== undefined && rec.board_num !== null && String(rec.board_num).length) {
         p.board_num = String(rec.board_num);
       }
-      if (rec.match_status === "no_match" || rec.match_status === "match" || rec.match_status === "unreviewed") {
+      if (napFromRec) {
+        p.not_a_pin = true;
+        p.match_status = "not_a_pin";
+        p.display_price = 0;
+        p.ladder_preserve_zero = true;
+      } else if (rec.match_status === "no_match" || rec.match_status === "match" || rec.match_status === "unreviewed") {
         p.match_status = rec.match_status;
-      }
-      if (Object.prototype.hasOwnProperty.call(rec, "ladder_preserve_zero")) {
+        if (p.not_a_pin) p.not_a_pin = false;
+        if (Object.prototype.hasOwnProperty.call(rec, "ladder_preserve_zero")) {
+          p.ladder_preserve_zero = !!rec.ladder_preserve_zero;
+        } else {
+          p.ladder_preserve_zero = false;
+        }
+      } else if (Object.prototype.hasOwnProperty.call(rec, "ladder_preserve_zero")) {
         p.ladder_preserve_zero = !!rec.ladder_preserve_zero;
       } else {
         p.ladder_preserve_zero = false;
