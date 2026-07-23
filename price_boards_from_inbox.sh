@@ -24,6 +24,8 @@
 #   BOARD_INBOX_DIR      — optional absolute path to local mirror inbox (launchd); default is ${PREP}/BoardsToPrice
 #                        — after a successful pipeline, canonical ${PREP}/BoardsToPrice/ is cleared of board images
 #                          so iCloud drop zone is empty for the next Lexi upload.
+#   PRICE_PIPELINE_WORK  — local-disk work root for rename/stage/RF-DETR/eBay (default: Application Support/
+#                          FinsAndPins/PricingWork). Avoids iCloud errno 11 while reading staged boards.
 #   PRICE_LOG_DIR        — writable log dir (launchd sets this under Application Support).
 #   PIN_PRICING_STUDY_MVP — PinPricingStudyMVP path; launchd should use Application Support copy (not iCloud .venv).
 #
@@ -55,23 +57,69 @@ log() {
   echo "$msg" | tee -a "$LOG_FILE"
 }
 
-# Copy key files to local disk (do not delete Roboflow key — unused in RF-DETR but kept).
+# Materialize key files onto local disk (do not delete Roboflow key — unused in RF-DETR but kept).
+# Do NOT use /bin/cp from iCloud: dataless stubs often report size>0 but copy as 0 bytes, which
+# zeros ebay_keys.json and triggers errno 11 when the pipeline falls back to iCloud under launchd.
+# Strategy: Python read_bytes (forces materialize) → write dest → update .backup; on failure restore backup.
 ensure_local_pricing_keys() {
   local dest="${PIN_PRICING_KEYS_DIR:-${HOME}/Library/Application Support/FinsAndPins/keys}"
   local src="${HOME}/Library/Mobile Documents/com~apple~CloudDocs/Minimal folder for Claude"
-  mkdir -p "$dest"
+  mkdir -p "$dest" "${dest}/.backup"
   export PIN_PRICING_KEYS_DIR="$dest"
-  local f
-  for f in ebay_keys.json "Gemini API Key.txt" "Roboflow API Key.txt"; do
-    if [[ -f "${src}/${f}" ]]; then
-      /bin/cp -f "${src}/${f}" "${dest}/${f}" 2>/dev/null || true
-      chmod 600 "${dest}/${f}" 2>/dev/null || true
-    fi
-  done
-  if [[ -s "${dest}/ebay_keys.json" ]]; then
-    log "Local pricing keys ready: ${dest} (ebay_keys.json present; Roboflow key kept, unused in RF-DETR)"
+  local py_out dest_sz
+  py_out=$(
+    PIN_KEYS_SRC="$src" PIN_KEYS_DEST="$dest" /usr/bin/python3 - <<'PY' 2>&1
+import os, sys
+from pathlib import Path
+
+src = Path(os.environ["PIN_KEYS_SRC"])
+dest = Path(os.environ["PIN_KEYS_DEST"])
+backup = dest / ".backup"
+backup.mkdir(parents=True, exist_ok=True)
+names = ["ebay_keys.json", "Gemini API Key.txt", "Roboflow API Key.txt"]
+msgs = []
+for name in names:
+    s, d, b = src / name, dest / name, backup / name
+    data = b""
+    try:
+        if s.is_file():
+            data = s.read_bytes()
+    except OSError as e:
+        msgs.append(f"WARN: read {name} from iCloud failed: {e}")
+        data = b""
+    if data:
+        d.write_bytes(data)
+        os.chmod(d, 0o600)
+        b.write_bytes(data)
+        os.chmod(b, 0o600)
+        msgs.append(f"ok {name}={len(data)}b")
+        continue
+    if b.is_file() and b.stat().st_size > 0:
+        d.write_bytes(b.read_bytes())
+        os.chmod(d, 0o600)
+        msgs.append(f"restored {name} from backup ({d.stat().st_size}b)")
+        continue
+    if d.is_file() and d.stat().st_size > 0:
+        msgs.append(f"keep existing {name}={d.stat().st_size}b")
+        continue
+    msgs.append(f"WARN: no usable {name}")
+ebay = dest / "ebay_keys.json"
+sz = ebay.stat().st_size if ebay.is_file() else 0
+print("; ".join(msgs))
+print(f"EBAY_KEYS_BYTES={sz}")
+sys.exit(0 if sz > 0 else 2)
+PY
+  ) || true
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    [[ "$line" == EBAY_KEYS_BYTES=* ]] && continue
+    log "keys: $line"
+  done <<< "$py_out"
+  dest_sz=$(stat -f %z "${dest}/ebay_keys.json" 2>/dev/null || echo 0)
+  if [[ "${dest_sz}" -gt 0 ]]; then
+    log "Local pricing keys ready: ${dest} (ebay_keys.json ${dest_sz} bytes; Roboflow key kept, unused in RF-DETR)"
   else
-    log "WARN: ${dest}/ebay_keys.json missing/empty — pipeline may fail reading iCloud keys under launchd"
+    log "ERROR: ${dest}/ebay_keys.json missing/empty after restore — refusing iCloud fallback under launchd"
   fi
 }
 
@@ -193,7 +241,7 @@ materialize_inbox_board_from_canonical() {
 }
 
 rollback_failed_collection_rename() {
-  local col_dir="${PREP}/${NEWNAME}"
+  local col_dir="${COL_DIR:-${WORK_ROOT:-$PREP}/${NEWNAME}}"
   [[ -n "${NEWNAME:-}" ]] || return 0
   [[ -d "$col_dir" ]] || return 0
   is_failed_price_collection_stub "$col_dir" || return 0
@@ -208,6 +256,17 @@ rollback_failed_collection_rename() {
         [[ -f "$f" ]] || continue
         mv "$f" "${INBOX}/$(basename "$f")" 2>/dev/null || true
       done
+  # Also pull boards out of _staged_boards if rename already staged.
+  if [[ -d "${col_dir}/_staged_boards" ]]; then
+    find "${col_dir}/_staged_boards" -maxdepth 1 -type f \
+      \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \
+      -o -iname '*.webp' -o -iname '*.tif' -o -iname '*.tiff' \) \
+      -print0 2>/dev/null \
+      | while IFS= read -r -d '' f; do
+          [[ -f "$f" ]] || continue
+          mv "$f" "${INBOX}/$(basename "$f")" 2>/dev/null || true
+        done
+  fi
   rm -rf "$col_dir"
   touch "${INBOX}/.gitkeep"
 }
@@ -291,10 +350,18 @@ if [[ "$board_count" -lt 1 ]]; then
   exit 1
 fi
 
+# Run detection/pricing on local disk — iCloud staged boards cause errno 11 mid RF-DETR.
+WORK_ROOT="${PRICE_PIPELINE_WORK:-${HOME}/Library/Application Support/FinsAndPins/PricingWork}"
+mkdir -p "$WORK_ROOT"
+
 base="PriceCollection_$(date +%Y%m%d_%H%M)"
 NEWNAME="$base"
 suffix=1
-while [[ -e "${PREP}/${NEWNAME}" ]]; do
+while [[ -e "${WORK_ROOT}/${NEWNAME}" || -e "${PREP}/${NEWNAME}" ]]; do
+  if is_failed_price_collection_stub "${WORK_ROOT}/${NEWNAME}"; then
+    remove_failed_price_collection_stub "${WORK_ROOT}/${NEWNAME}"
+    break
+  fi
   if is_failed_price_collection_stub "${PREP}/${NEWNAME}"; then
     remove_failed_price_collection_stub "${PREP}/${NEWNAME}"
     break
@@ -303,8 +370,8 @@ while [[ -e "${PREP}/${NEWNAME}" ]]; do
   suffix=$((suffix + 1))
 done
 
-log "Renaming inbox → ${NEWNAME} (${board_count} boards) [inbox=${INBOX}]"
-mv "$INBOX" "${PREP}/${NEWNAME}"
+log "Renaming inbox → ${NEWNAME} (${board_count} boards) [inbox=${INBOX}] [work=${WORK_ROOT}]"
+mv "$INBOX" "${WORK_ROOT}/${NEWNAME}"
 mkdir -p "$INBOX"
 touch "${INBOX}/.gitkeep"
 if [[ "$INBOX" != "${PREP}/BoardsToPrice" ]]; then
@@ -312,7 +379,7 @@ if [[ "$INBOX" != "${PREP}/BoardsToPrice" ]]; then
   touch "${PREP}/BoardsToPrice/.gitkeep"
 fi
 
-COL_DIR="${PREP}/${NEWNAME}"
+COL_DIR="${WORK_ROOT}/${NEWNAME}"
 STAGE="${COL_DIR}/_staged_boards"
 mkdir -p "$STAGE"
 rm -f "${STAGE}"/IMG_*.* 2>/dev/null || true
@@ -363,19 +430,23 @@ rm -rf "${COL_DIR}/crops" "${COL_DIR}/roboflow" "${COL_DIR}/testing_ui_visual_ba
 rm -f "${COL_DIR}/candidates.json" "${COL_DIR}/run_timing.json" 2>/dev/null || true
 
 tmp="${NEWNAME}__build_${RANDOM}"
-while [[ -e "${PREP}/${tmp}" ]]; do tmp="${NEWNAME}__build_${RANDOM}"; done
-rm -rf "${PREP}/${tmp}" 2>/dev/null || true
+while [[ -e "${WORK_ROOT}/${tmp}" ]]; do tmp="${NEWNAME}__build_${RANDOM}"; done
+rm -rf "${WORK_ROOT}/${tmp}" 2>/dev/null || true
 
 pip_err="${LOG_DIR}/pipeline_${tmp}.stderr"
 : >"$pip_err"
 
-log "Pipeline start run-id=${tmp} (PIN=${PIN})"
+log "Pipeline start run-id=${tmp} (PIN=${PIN}) (local work — not iCloud)"
 ensure_local_pricing_keys
+if [[ ! -s "${PIN_PRICING_KEYS_DIR:-${HOME}/Library/Application Support/FinsAndPins/keys}/ebay_keys.json" ]]; then
+  log "ERROR: aborting before RF-DETR — local ebay_keys.json is empty (fix App Support keys / .backup)"
+  exit 1
+fi
 set +e
 (
   cd "$PIN" && "$PY" "$PL" \
     --board-photos-dir "$STAGE" \
-    --out-dir "$PREP" \
+    --out-dir "$WORK_ROOT" \
     --run-id "$tmp" \
     --pool-n "${POOL_N:-20}" \
     --gate-t "${GATE_T:-10}" \
@@ -394,7 +465,7 @@ if [[ -s "$pip_err" ]]; then
 fi
 rm -f "$pip_err"
 
-src="${PREP}/${tmp}"
+src="${WORK_ROOT}/${tmp}"
 dst="$COL_DIR"
 for d in crops roboflow testing_ui_visual_baseline; do
   rm -rf "${dst}/${d}" 2>/dev/null || true
@@ -445,6 +516,39 @@ if command -v python3 >/dev/null 2>&1; then
   fi
 fi
 
+# Copy the finished run from local work (or iCloud PREP fallback) into the publish clone.
+# (Defined before use — bash only registers functions when the definition line executes.)
+copy_run_to_publish_repo() {
+  local src="${COL_DIR:-${WORK_ROOT:-$PREP}/${NEWNAME}}" dest="${PUBLISH_REPO}/${NEWNAME}" n
+  for n in 1 2 3; do
+    if ! /usr/bin/rsync -a --exclude '_staged_boards' "${src}/" "${dest}/" >>"$LOG_FILE" 2>&1; then
+      log "WARN: rsync to publish clone reported errors (attempt ${n}/3)"
+    fi
+    if [[ -f "${dest}/candidates.json" && -f "${dest}/testing_ui_visual_baseline/index.html" ]]; then
+      touch "${dest}/.gitkeep"
+      log "Copied ${NEWNAME} → publish clone (attempt ${n})"
+      return 0
+    fi
+    sleep 5
+  done
+  log "ERROR: could not copy ${NEWNAME} into publish clone after 3 attempts"
+  return 1
+}
+
+# Best-effort mirror of finished run into iCloud PREP (not used for RF-DETR reads).
+mirror_run_to_icloud_prep() {
+  local src="${COL_DIR}" dest="${PREP}/${NEWNAME}"
+  [[ -d "$src" ]] || return 0
+  [[ "$src" == "$dest" ]] && return 0
+  mkdir -p "$dest"
+  if /usr/bin/rsync -a --exclude '_staged_boards' "${src}/" "${dest}/" >>"$LOG_FILE" 2>&1; then
+    log "Mirrored ${NEWNAME} → iCloud PREP (best-effort)"
+  else
+    log "WARN: iCloud PREP mirror failed — publish clone is source of truth"
+  fi
+  return 0
+}
+
 PAGES_URL="https://finsandpins.github.io/PreparingInventory/${NEWNAME}/testing_ui_visual_baseline/index.html"
 cat > "${dst}/SHARE_LEXI_URL.txt" << EOF
 Lexi harness (GitHub Pages):
@@ -454,6 +558,8 @@ Open this file after push; Pages can take a minute to refresh.
 EOF
 log "Wrote ${dst}/SHARE_LEXI_URL.txt"
 log "Harness: ${PAGES_URL}"
+
+mirror_run_to_icloud_prep || log "WARN: iCloud PREP mirror skipped"
 
 if [[ -n "${BOARD_INBOX_DIR:-}" ]]; then
   log "Clearing canonical BoardsToPrice (${PREP}/BoardsToPrice) after successful pipeline (mirror inbox — remove duplicate iCloud copies)."
@@ -471,25 +577,6 @@ if [[ ! -d "${PUBLISH_REPO}/.git" ]]; then
   log "WARN: publish clone missing (${PUBLISH_REPO}) — falling back to iCloud repo git (less reliable under launchd)"
   PUBLISH_REPO="$PREP"
 fi
-
-# Copy the finished run out of iCloud into the clone; plain file copies with retry
-# survive iCloud eviction far better than git internals do.
-copy_run_to_publish_repo() {
-  local src="${PREP}/${NEWNAME}" dest="${PUBLISH_REPO}/${NEWNAME}" n
-  for n in 1 2 3; do
-    if ! /usr/bin/rsync -a --exclude '_staged_boards' "${src}/" "${dest}/" >>"$LOG_FILE" 2>&1; then
-      log "WARN: rsync to publish clone reported errors (attempt ${n}/3)"
-    fi
-    if [[ -f "${dest}/candidates.json" && -f "${dest}/testing_ui_visual_baseline/index.html" ]]; then
-      touch "${dest}/.gitkeep"
-      log "Copied ${NEWNAME} → publish clone (attempt ${n})"
-      return 0
-    fi
-    sleep 5
-  done
-  log "ERROR: could not copy ${NEWNAME} into publish clone after 3 attempts"
-  return 1
-}
 
 if [[ "$PUBLISH_REPO" != "$PREP" ]]; then
   git_with_retry git -C "$PUBLISH_REPO" pull --ff-only origin main \
