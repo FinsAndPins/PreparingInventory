@@ -1,0 +1,68 @@
+{
+  "predictions": [
+    {
+      "x": 996.875,
+      "y": 1240.9375,
+      "width": 481.25,
+      "height": 724.453125,
+      "confidence": 0.9594592452049255,
+      "class": "pin"
+    },
+    {
+      "x": 406.0546875,
+      "y": 1200.546875,
+      "width": 773.0078125,
+      "height": 752.3828125,
+      "confidence": 0.9564718008041382,
+      "class": "pin"
+    },
+    {
+      "x": 443.0078125,
+      "y": 528.515625,
+      "width": 757.109375,
+      "height": 667.734375,
+      "confidence": 0.946793794631958,
+      "class": "pin"
+    },
+    {
+      "x": 1056.171875,
+      "y": 544.4140625,
+      "width": 527.65625,
+      "height": 686.640625,
+      "confidence": 0.9269675612449646,
+      "class": "pin"
+    }
+  ],
+  "image": {
+    "width": 1320,
+    "height": 1760
+  },
+  "_pin_tools_meta": {
+    "pin_dedupe": {
+      "rule_id": "pin_dedupe_nms_v2",
+      "pass1": {
+        "rule_id": "pin_dedupe_nms_v1",
+        "method": "greedy_iou_nms_keep_highest_confidence",
+        "iou_threshold": 0.85,
+        "raw_prediction_count": 4,
+        "deduped_prediction_count": 4,
+        "removed_count": 0
+      },
+      "pass2": {
+        "rule_id": "pin_dedupe_nms_v1",
+        "method": "greedy_iou_nms_keep_highest_confidence",
+        "iou_threshold": 0.42,
+        "raw_prediction_count": 4,
+        "deduped_prediction_count": 4,
+        "removed_count": 0
+      },
+      "iou_primary": 0.85,
+      "iou_secondary": 0.42,
+      "raw_prediction_count": 4,
+      "deduped_prediction_count": 4,
+      "removed_count_pass1": 0,
+      "removed_count_pass2": 0,
+      "removed_count_total": 0
+    }
+  }
+}

@@ -1,0 +1,172 @@
+{
+  "predictions": [
+    {
+      "x": 195.8837890625,
+      "y": 1461.796875,
+      "width": 391.767578125,
+      "height": 548.7109375,
+      "confidence": 0.9492005109786987,
+      "class": "pin"
+    },
+    {
+      "x": 538.3984375,
+      "y": 1474.6875,
+      "width": 355.3515625,
+      "height": 525.078125,
+      "confidence": 0.9462003111839294,
+      "class": "pin"
+    },
+    {
+      "x": 1154.3017578125,
+      "y": 987.421875,
+      "width": 331.396484375,
+      "height": 491.9921875,
+      "confidence": 0.9415467381477356,
+      "class": "pin"
+    },
+    {
+      "x": 1162.94921875,
+      "y": 1479.84375,
+      "width": 314.1015625,
+      "height": 506.6015625,
+      "confidence": 0.93475341796875,
+      "class": "pin"
+    },
+    {
+      "x": 233.75,
+      "y": 967.65625,
+      "width": 356.640625,
+      "height": 491.9921875,
+      "confidence": 0.9336731433868408,
+      "class": "pin"
+    },
+    {
+      "x": 552.1484375,
+      "y": 976.25,
+      "width": 302.5,
+      "height": 493.7109375,
+      "confidence": 0.9241418242454529,
+      "class": "pin"
+    },
+    {
+      "x": 1148.125,
+      "y": 579.6484375,
+      "width": 271.1328125,
+      "height": 324.84375,
+      "confidence": 0.9212159514427185,
+      "class": "pin"
+    },
+    {
+      "x": 855.9375,
+      "y": 1479.84375,
+      "width": 312.16796875,
+      "height": 516.0546875,
+      "confidence": 0.9170058369636536,
+      "class": "pin"
+    },
+    {
+      "x": 849.921875,
+      "y": 975.390625,
+      "width": 316.03515625,
+      "height": 487.6953125,
+      "confidence": 0.9111796617507935,
+      "class": "pin"
+    },
+    {
+      "x": 404.765625,
+      "y": 480.8203125,
+      "width": 194.326171875,
+      "height": 181.11328125,
+      "confidence": 0.8184467554092407,
+      "class": "pin"
+    },
+    {
+      "x": 507.24609375,
+      "y": 473.9453125,
+      "width": 1014.4921875,
+      "height": 529.375,
+      "confidence": 0.8010035157203674,
+      "class": "pin"
+    },
+    {
+      "x": 882.578125,
+      "y": 479.1015625,
+      "width": 178.427734375,
+      "height": 167.900390625,
+      "confidence": 0.7346909642219543,
+      "class": "pin"
+    },
+    {
+      "x": 715.859375,
+      "y": 472.65625,
+      "width": 189.921875,
+      "height": 213.876953125,
+      "confidence": 0.7126322984695435,
+      "class": "pin"
+    },
+    {
+      "x": 570.625,
+      "y": 485.9765625,
+      "width": 165.21484375,
+      "height": 168.22265625,
+      "confidence": 0.7003827095031738,
+      "class": "pin"
+    },
+    {
+      "x": 174.453125,
+      "y": 448.59375,
+      "width": 203.671875,
+      "height": 225.5859375,
+      "confidence": 0.5258253812789917,
+      "class": "pin"
+    },
+    {
+      "x": 1140.390625,
+      "y": 932.421875,
+      "width": 205.17578125,
+      "height": 241.69921875,
+      "confidence": 0.33393749594688416,
+      "class": "pin"
+    },
+    {
+      "x": 296.484375,
+      "y": 459.765625,
+      "width": 84.86328125,
+      "height": 114.404296875,
+      "confidence": 0.2907794415950775,
+      "class": "pin"
+    }
+  ],
+  "image": {
+    "width": 1320,
+    "height": 1760
+  },
+  "_pin_tools_meta": {
+    "pin_dedupe": {
+      "rule_id": "pin_dedupe_nms_v2",
+      "pass1": {
+        "rule_id": "pin_dedupe_nms_v1",
+        "method": "greedy_iou_nms_keep_highest_confidence",
+        "iou_threshold": 0.85,
+        "raw_prediction_count": 19,
+        "deduped_prediction_count": 19,
+        "removed_count": 0
+      },
+      "pass2": {
+        "rule_id": "pin_dedupe_nms_v1",
+        "method": "greedy_iou_nms_keep_highest_confidence",
+        "iou_threshold": 0.42,
+        "raw_prediction_count": 19,
+        "deduped_prediction_count": 17,
+        "removed_count": 2
+      },
+      "iou_primary": 0.85,
+      "iou_secondary": 0.42,
+      "raw_prediction_count": 19,
+      "deduped_prediction_count": 17,
+      "removed_count_pass1": 0,
+      "removed_count_pass2": 2,
+      "removed_count_total": 2
+    }
+  }
+}
