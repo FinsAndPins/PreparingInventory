@@ -43,10 +43,25 @@ jobs:
           done < <(git ls-tree --name-only HEAD | grep '^PriceCollection_' || true)
           echo "Sparse-added ${added} testing UI path(s)."
 
+      - name: Sparse-add title validator review pages
+        run: |
+          set -euo pipefail
+          added=0
+          while IFS= read -r d; do
+            git sparse-checkout add "$d"
+            added=$((added+1))
+          done < <(git ls-tree --name-only HEAD | grep '^title_validator' || true)
+          echo "Sparse-added ${added} title_validator path(s)."
+
       - name: Assemble site artifact
         run: |
           mkdir -p _site
           cp index.html pricing_index.json .nojekyll _site/
+          for tv in title_validator*; do
+            if [ -d "$tv" ]; then
+              cp -R "$tv" "_site/"
+            fi
+          done
           for baseline in PriceCollection_*/testing_ui_visual_baseline; do
             if [ -d "$baseline" ]; then
               collection="${baseline%/testing_ui_visual_baseline}"
