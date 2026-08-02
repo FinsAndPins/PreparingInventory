@@ -289,8 +289,10 @@ function renderPin(pi) {
   document.getElementById('pd-title').textContent = p.title || p.pk;
   document.getElementById('undo-btn').style.display =
     (lastUndo && lastUndo.pk === p.pk) ? 'inline' : 'none';
+  // Leave eBay search empty by default (easier to type a fresh query).
+  // navigate() already clears the field when changing pins; do not prefill title.
   const ei = document.getElementById('ebay-input');
-  if (ei && !ei.dataset.edited) ei.value = p.title || '';
+  if (ei && !ei.dataset.edited) ei.value = '';
   renderTiles(p);
   document.getElementById('tile-area').scrollTop = 0;
 }
