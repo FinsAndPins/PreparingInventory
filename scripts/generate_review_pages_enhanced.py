@@ -682,8 +682,23 @@ function showPin(i) {
   if (_fill) { _fill.style.width = _pct+'%'; _fill.style.background = _pct===100 ? '#1a5e1a' : '#2a6eff'; }
 }
 
-function record(pk, status) {
-  return _fbWrite(pk, { match_status: status, matched_at: new Date().toISOString() });
+function record(pk, status, pin) {
+  const fields = { match_status: status, matched_at: new Date().toISOString() };
+  // On Match, also persist the shown slot price so CTR / CTP see display_price
+  // without a separate ClickToPrice step (additive Firebase fields only).
+  if (status === 'match' && pin) {
+    const price = Number(pin.price);
+    const idx = (pin.show_slot != null) ? Number(pin.show_slot) : 0;
+    if (isFinite(price) && price > 0) fields.display_price = Math.round(price);
+    fields.selected_candidate_idx = isFinite(idx) ? idx : 0;
+    fields.selected_candidate = {
+      price: (isFinite(price) && price > 0) ? price : 0,
+      total_price: (isFinite(price) && price > 0) ? price : 0,
+      thumbUrl: pin.thumb || '',
+      rank: isFinite(idx) ? idx : 0,
+    };
+  }
+  return _fbWrite(pk, fields);
 }
 
 function doAction(status) {
@@ -692,7 +707,7 @@ function doAction(status) {
   history.push(idx);
   idx++;
   showPin(idx);
-  try { record(p.pk, status); } catch(e) { console.warn('CTM write failed', e); }
+  try { record(p.pk, status, p); } catch(e) { console.warn('CTM write failed', e); }
 }
 
 document.getElementById('btn-match').addEventListener('click', () => doAction('match'));
@@ -707,9 +722,7 @@ document.getElementById('btn-notpin').addEventListener('click', () => {
   try {
     _fbWrite(p.pk, {
       match_status: 'not_a_pin',
-      not_a_pin: true,
       display_price: 0,
-      ladder_preserve_zero: true,
       marked_not_a_pin_at: new Date().toISOString(),
     });
   } catch(e) { console.warn('not-a-pin write failed', e); }
@@ -920,6 +933,12 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
 .tile-hist{position:absolute;top:3px;left:3px;
   background:rgba(150,60,220,.92);color:#fff;font-size:8px;font-weight:700;
   padding:1px 4px;border-radius:2px;z-index:2;line-height:1.3}
+.tile-open{display:block;text-align:center;padding:4px 4px;font-size:10px;font-weight:700;
+  color:#9ec8ff;background:#0d1520;border-top:1px solid #222;text-decoration:none}
+.tile-open:active{background:#1a3050}
+.pm-ebay{flex-shrink:0;font-size:11px;color:#9ec8ff;text-decoration:none;white-space:nowrap;padding:0 2px}
+.pm-ebay[hidden]{display:none!important}
+.kw-open{display:inline-block;margin-top:6px;font-size:11px;font-weight:700;color:#9ec8ff;text-decoration:none}
 /* ── Bottom nav ── */
 #bottom-nav{flex-shrink:0;background:#111;border-top:1px solid #222;padding:5px 8px 8px}
 .var-bar{display:flex;gap:4px;overflow-x:auto;margin-bottom:5px;
@@ -1168,7 +1187,6 @@ function markNotAPin(p) {
   _fbWrite(p.pk, {
     display_price: 0,
     not_a_pin: true,
-    ladder_preserve_zero: true,
     slot_reviewed_at: new Date().toISOString(),
     match_status: 'not_a_pin'
   });
@@ -1372,6 +1390,12 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
 .tile-hist{position:absolute;top:3px;left:3px;
   background:rgba(150,60,220,.92);color:#fff;font-size:8px;font-weight:700;
   padding:1px 4px;border-radius:2px;z-index:2;line-height:1.3}
+.tile-open{display:block;text-align:center;padding:4px 4px;font-size:10px;font-weight:700;
+  color:#9ec8ff;background:#0d1520;border-top:1px solid #222;text-decoration:none}
+.tile-open:active{background:#1a3050}
+.pm-ebay{flex-shrink:0;font-size:11px;color:#9ec8ff;text-decoration:none;white-space:nowrap;padding:0 2px}
+.pm-ebay[hidden]{display:none!important}
+.kw-open{display:inline-block;margin-top:6px;font-size:11px;font-weight:700;color:#9ec8ff;text-decoration:none}
 /* ── Bottom nav ── */
 #bottom-nav{flex-shrink:0;background:#111;border-top:1px solid #222;padding:5px 8px 8px}
 .nav-row{display:flex;gap:6px;margin-top:5px}
@@ -1414,6 +1438,7 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
         + '  <div id="pin-meta">\n'
         + '    <div class="pm-title" id="pd-title">—</div>\n'
         + '    <div class="pm-right">\n'
+        + '      <a class="pm-ebay" id="pd-ebay" href="#" target="_blank" rel="noopener" hidden>Open listing &#8599;</a>\n'
         + '      <span class="pm-idx" id="pd-idx"></span>\n'
         + '      <button class="pd-undo" id="undo-btn">&#8617; Undo</button>\n'
         + '    </div>\n'
@@ -1574,8 +1599,24 @@ function renderPin(pi) {
   document.getElementById('pd-title').textContent = p.title || p.pk;
   document.getElementById('undo-btn').style.display =
     (lastUndo && lastUndo.pk === p.pk) ? 'inline' : 'none';
+  const ebayA = document.getElementById('pd-ebay');
+  if (ebayA) {
+    const isNaPHdr = confirmed[p.pk] === -1;
+    const coiHdr = chosenIdx(p);
+    const chosenHdr = (p.cands || [])[coiHdr];
+    const listingUrl = (!isNaPHdr && chosenHdr && chosenHdr.url) ? String(chosenHdr.url) : '';
+    if (listingUrl) {
+      ebayA.href = listingUrl;
+      ebayA.hidden = false;
+    } else {
+      ebayA.removeAttribute('href');
+      ebayA.hidden = true;
+    }
+  }
+  // Leave eBay search empty by default (easier to type a fresh query).
+  // navigate() already clears the field when changing pins; do not prefill title.
   const ei = document.getElementById('ebay-input');
-  if (ei && !ei.dataset.edited) ei.value = p.title || '';
+  if (ei && !ei.dataset.edited) ei.value = '';
   renderTiles(p);
   document.getElementById('tile-area').scrollTop = 0;
 }
@@ -1653,6 +1694,16 @@ function renderTiles(p) {
     const sn = document.createElement('div');
     sn.className = 'tile-sn'; sn.textContent = 'S'+c.origIdx;
     tile.append(img, pbar, sn);
+    if (c.url) {
+      const open = document.createElement('a');
+      open.className = 'tile-open';
+      open.href = c.url;
+      open.target = '_blank';
+      open.rel = 'noopener';
+      open.textContent = 'Open listing';
+      open.addEventListener('click', e => e.stopPropagation());
+      tile.appendChild(open);
+    }
     if (isChosen) {
       const star = document.createElement('div');
       star.className = 'tile-star'; star.textContent = '★';
@@ -1864,7 +1915,13 @@ function _kwRenderPage(p) {
     const card = document.createElement('div');
     card.className = 'kwCard';
     const price = Math.round(parseFloat(it.price)||0);
-    card.innerHTML = '<img src="'+(it.thumb||'')+'" alt="" onerror="this.style.display=\\'none\\'"><div class="kw-p">$'+price+'</div><div class="kw-t">'+(it.title||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</div>';
+    const openUrl = String(it.source || it.url || '');
+    const openHtml = openUrl
+      ? '<a class="kw-open" href="'+openUrl.replace(/&/g,'&amp;').replace(/"/g,'&quot;')+'" target="_blank" rel="noopener">Open listing &#8599;</a>'
+      : '';
+    card.innerHTML = '<img src="'+(it.thumb||'')+'" alt="" onerror="this.style.display=\\'none\\'"><div class="kw-p">$'+price+'</div><div class="kw-t">'+(it.title||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</div>'+openHtml;
+    const openA = card.querySelector('.kw-open');
+    if (openA) openA.addEventListener('click', e => e.stopPropagation());
     card.addEventListener('click', () => _kwPickListing(p, it));
     grid.appendChild(card);
   });
