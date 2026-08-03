@@ -19,6 +19,7 @@
     .boardHdrR{right:8px}
     .overlayRoot{--ov-price-h:center;--ov-price-v:center;--ov-price-font:16px;--ov-price-pad-x:10px;--ov-price-pad-y:5px;--ov-price-bg:#ffeb3b;--ov-price-fg:#111111;--ov-price-border:#222222}
     .pin{position:absolute;transform:translate(-50%,-50%);display:flex;box-sizing:border-box;border-radius:8px;cursor:pointer;justify-content:var(--ov-price-h);align-items:var(--ov-price-v);border:2px solid rgba(99,164,255,.85)}
+    .pin .price:empty{display:none!important}
     .pin.nomatch-needs-ctp{border-color:#e33 !important;box-shadow:0 0 0 1px #e33}
     .pin.nomatch-needs-ctp::after{content:'\2715';position:absolute;top:0;right:0;color:#fff;background:#e33;
       font-size:11px;font-weight:bold;line-height:1;padding:1px 4px;border-radius:0 6px 0 4px;pointer-events:none}
@@ -487,6 +488,7 @@
     window.ctpWhatnotPreview = readWhatnotPreview();
     /** Pin badge: whole dollars, no $ (readability). Board header totals use moneyListRaw with $. */
     function overlayPinMoney(p) {
+      if (isNotAPin(p)) return "";
       const raw = roundMoney2(p.display_price);
       if (window.ctpWhatnotPreview) return String(whatnotLadderPrice(raw, p));
       return String(raw);
@@ -1045,9 +1047,16 @@
           e.dataset.pinKey = p.pin_key || "";
           e.onclick = () => {
             const pk = p.pin_key || '';
+            try {
+              sessionStorage.setItem('ctp_overlay_return', JSON.stringify({
+                pinKey: pk,
+                scrollY: window.scrollY || window.pageYOffset || 0,
+                ts: Date.now()
+              }));
+            } catch (err) {}
             window.location.href = pk
-              ? ('new_ctp.html?pin=' + encodeURIComponent(pk))
-              : 'new_ctp.html';
+              ? ('new_ctp.html?pin=' + encodeURIComponent(pk) + '&from=overlay')
+              : 'new_ctp.html?from=overlay';
           };
           const pr = document.createElement("div");
           pr.className = "price";
@@ -1858,6 +1867,28 @@
       return JSON.parse(new TextDecoder("utf-8").decode(bytes));
     }
 
+<!-- __overlay_return_focus__ -->
+    function restoreOverlayReturnFocus() {
+      const params = new URLSearchParams(window.location.search);
+      let pk = params.get("pin") || "";
+      let scrollY = params.get("scroll");
+      try {
+        const raw = sessionStorage.getItem("ctp_overlay_return");
+        if (raw) {
+          const o = JSON.parse(raw);
+          if (!pk && o && o.pinKey) pk = String(o.pinKey);
+          if ((scrollY == null || scrollY === "") && o && o.scrollY != null) scrollY = o.scrollY;
+        }
+      } catch (e) {}
+      if (pk) {
+        const i = pins.findIndex((x) => x.pin_key === pk);
+        if (i >= 0) pinIndex = i;
+      }
+      requestAnimationFrame(() => {
+        if (pk) scrollOverlayToPinKey(pk);
+        else if (scrollY != null && scrollY !== "") window.scrollTo(0, Number(scrollY) || 0);
+      });
+    }
     function paintAll() {
       renderOverlay();
       renderPinList();
@@ -1907,6 +1938,7 @@
         wireOverlayPrefsUiOnce();
         refreshOverlayFormFromSavedUser();
         paintAll();
+        restoreOverlayReturnFocus();
         setTimeout(() => {
           try {
             const base = ebayProxyBase();
@@ -1940,6 +1972,7 @@
           loadExisting()
             .then(() => {
               paintAll();
+              restoreOverlayReturnFocus();
               wirePinsFirebaseListener();
             })
             .catch((err) => console.warn("Firebase loadExisting failed; using embedded data only.", err));

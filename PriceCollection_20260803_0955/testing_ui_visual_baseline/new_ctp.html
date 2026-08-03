@@ -739,9 +739,61 @@ applyFilter();
   applyFilter();
 })();
 
-// Jump to specific pin if ?pin= param present
+
+const CTP_OVERLAY_RETURN_KEY = 'ctp_overlay_return';
+function _readOverlayReturn() {
+  try { return JSON.parse(sessionStorage.getItem(CTP_OVERLAY_RETURN_KEY) || 'null'); }
+  catch (e) { return null; }
+}
+function _writeOverlayReturn(pinKey, scrollY) {
+  try {
+    sessionStorage.setItem(CTP_OVERLAY_RETURN_KEY, JSON.stringify({
+      pinKey: pinKey || '',
+      scrollY: Number(scrollY) || 0,
+      ts: Date.now()
+    }));
+  } catch (e) {}
+}
+function returnToOverlaySource() {
+  const cur = (typeof displayPins !== 'undefined' && displayPins[selPin]) ? displayPins[selPin] : null;
+  const pk = (cur && cur.pk)
+    || new URLSearchParams(window.location.search).get('pin')
+    || ((_readOverlayReturn() || {}).pinKey || '');
+  const prev = _readOverlayReturn() || {};
+  const scrollY = prev.scrollY || 0;
+  _writeOverlayReturn(pk, scrollY);
+  let url = 'index.html';
+  const q = [];
+  if (pk) q.push('pin=' + encodeURIComponent(pk));
+  if (scrollY) q.push('scroll=' + encodeURIComponent(String(Math.round(scrollY))));
+  if (q.length) url += '?' + q.join('&');
+  window.location.href = url;
+}
+function wireOverlayNavReturn() {
+  document.querySelectorAll('#nav-menu a').forEach(function(a) {
+    if ((a.getAttribute('href') || '') !== 'index.html') return;
+    if (a.dataset.overlayReturnWired) return;
+    a.dataset.overlayReturnWired = '1';
+    a.addEventListener('click', function(e) {
+      e.preventDefault();
+      returnToOverlaySource();
+    });
+  });
+}
+
+// Jump to specific pin if ?pin= param present; always wire Overlay return nav.
 (function(){
-  const pk = new URLSearchParams(window.location.search).get('pin');
+  wireOverlayNavReturn();
+  const params = new URLSearchParams(window.location.search);
+  const pk = params.get('pin');
+  const fromOverlay = params.get('from') === 'overlay';
+  const hasReturn = !!_readOverlayReturn();
+  const _bb = document.getElementById('src-back-btn');
+  if (_bb && (fromOverlay || hasReturn || pk)) {
+    _bb.style.display = '';
+    _bb.title = 'Back to Overlay';
+    _bb.onclick = () => returnToOverlaySource();
+  }
   if (!pk) return;
   // Force "all" filter so the pin is always visible regardless of its match_status
   curFilter = 'all';
@@ -755,9 +807,6 @@ applyFilter();
   selPin = i;
   sessionStorage.setItem(STORE_KEY, i);
   renderPin(i);
-  // Show back button — returns to overlay (or contact sheet) at original scroll position
-  const _bb = document.getElementById('src-back-btn');
-  if (_bb) { _bb.style.display = ''; _bb.onclick = () => history.back(); }
 })();
 </script>
 <script>
