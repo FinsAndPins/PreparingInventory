@@ -1087,8 +1087,8 @@
           e.onclick = () => {
             const pk = p.pin_key || '';
             window.location.href = pk
-              ? ('new_ctp.html?pin=' + encodeURIComponent(pk))
-              : 'new_ctp.html';
+              ? ('new_ctp.html?filter=all&pin=' + encodeURIComponent(pk))
+              : 'new_ctp.html?filter=all';
           };
           const pr = document.createElement("div");
           pr.className = "price";
