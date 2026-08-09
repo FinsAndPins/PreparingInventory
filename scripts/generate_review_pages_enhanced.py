@@ -2059,7 +2059,7 @@ document.getElementById('kwOpenWeb').addEventListener('click', ev => {
   if (q) window.open('https://www.ebay.com/sch/i.html?_nkw='+encodeURIComponent(q)+'&LH_Sold=1&LH_Complete=1','_blank');
 });
 document.getElementById('ebay-btn').addEventListener('click', async () => {
-  const p = displayPins[selPin]; if (!p) return;
+  const p = ctpRequirePin('Search'); if (!p) return;
   const q = (document.getElementById('ebay-input').value||'').trim(); if (!q) return;
   const searchPk = p.pk;
   const st = document.getElementById('kwStatus');
@@ -2095,7 +2095,7 @@ document.getElementById('kwNext').addEventListener('click', () => {
 });
 
 document.getElementById('manual-btn').addEventListener('click', () => {
-  const p = displayPins[selPin]; if (!p) return;
+  const p = ctpRequirePin('Set Price'); if (!p) return;
   const v = parseFloat(document.getElementById('manual-price').value);
   if (isNaN(v) || v <= 0) return;
   const prevMs = p.ms;
@@ -2115,6 +2115,42 @@ document.getElementById('manual-btn').addEventListener('click', () => {
   renderPin(selPin);
 });
 
+function showCtpEmptyMessage(msg, opts) {
+  opts = opts || {};
+  const grid = document.getElementById('tile-grid');
+  const title = document.getElementById('pd-title');
+  const idxEl = document.getElementById('pd-idx');
+  if (title) title.textContent = msg;
+  if (idxEl) idxEl.textContent = '';
+  if (grid) {
+    let html = '<div style="grid-column:1/-1;padding:24px 12px;color:#aaa;font-size:14px;line-height:1.45">' + msg;
+    if (opts.offerAll) {
+      html += '<div style="margin-top:14px"><button type="button" id="ctp-empty-all" class="nav-btn" style="height:42px;padding:0 16px;background:#1e4fa0;color:#fff;border:none;border-radius:8px;font-weight:700">Open All pins</button></div>';
+    }
+    html += '</div>';
+    grid.innerHTML = html;
+    const b = document.getElementById('ctp-empty-all');
+    if (b) b.onclick = function(){ switchCtpFilter('all'); };
+  }
+}
+function switchCtpFilter(f) {
+  curFilter = f;
+  sessionStorage.removeItem(STORE_KEY);
+  try { history.replaceState(null, '', 'new_ctp.html?filter=' + encodeURIComponent(f)); } catch (err) {}
+  document.querySelectorAll('.filt-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.filter === curFilter);
+  });
+  applyFilter();
+}
+function ctpRequirePin(actionLabel) {
+  const p = displayPins[selPin];
+  if (p) return p;
+  const st = document.getElementById('kwStatus');
+  const msg = 'No pin in this filter — tap All (or Open All pins).';
+  if (st) st.textContent = msg;
+  showCtpEmptyMessage((actionLabel ? (actionLabel + ': ') : '') + msg, { offerAll: curFilter !== 'all' });
+  return null;
+}
 function applyFilter() {
   const SKIP = ['match','no_match','auto_match','priced','not_a_pin'];
   let pins = [...PINS];
@@ -2123,10 +2159,17 @@ function applyFilter() {
   else if (curFilter !== 'all')   pins = pins.filter(p => (p.cats||[]).includes(curFilter));
   displayPins = pins;
   const saved = parseInt(sessionStorage.getItem(STORE_KEY) || '0', 10);
-  selPin = Math.min(saved, Math.max(0, displayPins.length - 1));
+  selPin = displayPins.length ? Math.min(saved, displayPins.length - 1) : 0;
   lastUndo = null;
   document.getElementById('ctp-count').textContent = displayPins.length + ' / ' + PINS.length + ' pins';
   updateFilterCounts();
+  if (!displayPins.length) {
+    const msg = (curFilter === 'nomatch')
+      ? 'No Match queue is empty — Search / Set Price need a pin. Open All to edit priced pins.'
+      : 'No pins in this filter.';
+    showCtpEmptyMessage(msg, { offerAll: curFilter !== 'all' });
+    return;
+  }
   renderPin(selPin);
 }
 
@@ -2237,12 +2280,24 @@ applyFilter();
   }
   console.log('CTP: hydrated ' + updated + ' pins from Firebase (' + keys.length + ' entries found)');
   // Re-apply filter with updated statuses then re-check ?pin= param
-  const urlPk = new URLSearchParams(window.location.search).get('pin');
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlPk = urlParams.get('pin');
+  const urlFilter = urlParams.get('filter');
   if (urlPk) curFilter = 'all';
   document.querySelectorAll('.filt-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.filter === curFilter);
   });
   applyFilter();
+  // Default No Match / Unreviewed can be empty after pricing — fall back to All so
+  // Search / Set Price / Next have a pin (unless user explicitly chose another filter).
+  if (!urlPk && !displayPins.length && (!urlFilter || urlFilter === 'nomatch' || urlFilter === 'no_match' || urlFilter === 'unrev' || urlFilter === 'unreviewed')) {
+    curFilter = 'all';
+    document.querySelectorAll('.filt-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.filter === curFilter);
+    });
+    try { history.replaceState(null, '', 'new_ctp.html?filter=all'); } catch (err) {}
+    applyFilter();
+  }
   if (urlPk) {
     const i = displayPins.findIndex(p => p.pk === urlPk);
     if (i >= 0) { selPin = i; sessionStorage.setItem(STORE_KEY, i); renderPin(i); }
