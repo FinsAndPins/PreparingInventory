@@ -1918,8 +1918,10 @@ document.getElementById('next-btn').addEventListener('click', () => { advanceNex
 document.getElementById('nap-btn').addEventListener('click', () => {
   const p = displayPins[selPin]; if (p) markNotAPin(p);
 });
-document.getElementById('needs-price-dismiss').addEventListener('click', hideNeedsPricePopup);
-document.getElementById('needs-price-first').addEventListener('click', goToFirstNeedsReview);
+const _npDismiss = document.getElementById('needs-price-dismiss');
+if (_npDismiss) _npDismiss.addEventListener('click', hideNeedsPricePopup);
+const _npFirst = document.getElementById('needs-price-first');
+if (_npFirst) _npFirst.addEventListener('click', goToFirstNeedsReview);
 
 document.getElementById('undo-btn').addEventListener('click', () => {
   if (!lastUndo) return;
@@ -2223,6 +2225,15 @@ document.querySelectorAll('.filt-btn').forEach(btn => {
 });
 
 applyFilter();
+// If No Match is empty, land on All so the page isn't blank while Firebase loads.
+if (!displayPins.length && curFilter === 'nomatch') {
+  curFilter = 'all';
+  document.querySelectorAll('.filt-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.filter === curFilter);
+  });
+  try { history.replaceState(null, '', 'new_ctp.html?filter=all'); } catch (err) {}
+  applyFilter();
+}
 
 // Open with ?filter=no_match (or nomatch) from ClickToMatch done link
 (function(){
