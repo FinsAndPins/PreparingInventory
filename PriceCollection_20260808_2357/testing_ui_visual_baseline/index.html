@@ -20,6 +20,7 @@
     /* Price badges match CTR 20260810 .pin-pb (dark box, white + gold sale) */
     .overlayRoot{--ov-price-h:right;--ov-price-v:top;--ov-price-font:10px;--ov-price-pad-x:5px;--ov-price-pad-y:1px;--ov-price-bg:rgba(0,0,0,0.78);--ov-price-fg:#ffffff;--ov-price-border:transparent}
     .pin{position:absolute;transform:translate(-50%,-50%);display:block;box-sizing:border-box;border-radius:8px;cursor:pointer;border:2px solid rgba(99,164,255,.85)}
+    .pin.nap{border-color:rgba(140,140,140,.55);opacity:.5}
     .overlayRoot.boxes-off .pin{border-color:transparent;background:transparent}
     .price{position:absolute;top:2px;right:2px;z-index:2;box-sizing:border-box;font-weight:700;margin:0;
       border-radius:4px;padding:1px 5px;font-size:10px;line-height:1.4;
@@ -27,6 +28,7 @@
       white-space:nowrap;pointer-events:none}
     .price s{opacity:.75;font-weight:600;color:#fff}
     .price .pb-d{color:#ffd700;margin-left:3px}
+    .price.nap{display:none!important}
     .overlayRoot.prices-off .price{display:none!important}
     .overlayPrefDetails summary::-webkit-details-marker{display:none}
     .overlayPrefDetails summary{list-style:none}
@@ -128,7 +130,7 @@
     <button class="btn" id="navBatch">Batch Review</button>
     <span class="pill" id="runPill"></span>
     <label class="pill" style="display:flex;align-items:center;gap:8px;margin:0;font-weight:normal"><span style="font-size:12px;opacity:.9">Name</span><input id="ctpUserInput" type="text" autocomplete="username" placeholder="you" style="width:min(140px,30vw);padding:5px 8px;border-radius:8px;border:1px solid #2a2a33;background:#0f0f12;color:#eee;font-size:13px" title="Saved in this browser (no popup)"/></label>
-    <label class="pill" style="display:flex;align-items:center;gap:8px;margin:0;font-weight:normal" title="When on, badges match CTR 20260810: list = ceil to $5 (min $10), then 25% off = round(list×0.75). Shows list + sale. Stored Firebase prices stay raw eBay. Not a Pin stays $0. Lexi $0 with ladder_preserve_zero stays $0.">
+    <label class="pill" style="display:flex;align-items:center;gap:8px;margin:0;font-weight:normal" title="When on, badges match CTR 20260810: list = ceil to $5 (min $10), then 25% off = round(list×0.75). Shows list + sale. Stored Firebase prices stay raw eBay. Not a Pin has no price badge. Lexi $0 with ladder_preserve_zero stays $0.">
       <input type="checkbox" id="ctpWhatnotPreviewChk"/>
       <span style="font-size:12px">Apply CTR rounding (list + 25% off)</span>
     </label>
@@ -500,9 +502,15 @@
       window.ctpWhatnotPreview = !!on;
     }
     window.ctpWhatnotPreview = readWhatnotPreview();
-    /** Fill pin badge: raw dollars, or CTR list (struck) + 25% off sale. */
+    /** Fill pin badge: raw dollars, or CTR list (struck) + 25% off sale. NaP: no price. */
     function fillOverlayPinBadge(pr, p) {
       pr.textContent = "";
+      pr.classList.remove("nap");
+      if (isNotAPin(p)) {
+        // Not a Pin must not show $0 / list / sale — hide the badge entirely.
+        pr.classList.add("nap");
+        return;
+      }
       const raw = roundMoney2(p.display_price);
       if (!window.ctpWhatnotPreview) {
         pr.textContent = String(raw);
@@ -1077,12 +1085,13 @@
         wrap.appendChild(br);
         (b.pins || []).forEach((p) => {
           const e = document.createElement("div");
-          e.className = "pin";
+          e.className = "pin" + (isNotAPin(p) ? " nap" : "");
           e.style.left = (100 * p.bbox.x / b.thumb_w) + "%";
           e.style.top = (100 * p.bbox.y / b.thumb_h) + "%";
           e.style.width = (100 * p.bbox.width / b.thumb_w) + "%";
           e.style.height = (100 * p.bbox.height / b.thumb_h) + "%";
-          e.title = `${pinBoardPinLabel(p)} — ${pinImgAndPinRefLine(p)} — ${p.crop_filename}`;
+          e.title = `${pinBoardPinLabel(p)} — ${pinImgAndPinRefLine(p)} — ${p.crop_filename}`
+            + (isNotAPin(p) ? " — Not a Pin" : "");
           e.dataset.pinKey = p.pin_key || "";
           e.onclick = () => {
             const pk = p.pin_key || '';
