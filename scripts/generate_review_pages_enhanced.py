@@ -2,11 +2,10 @@
 """
 generate_review_pages_enhanced.py — Review pages for Enhanced pricing pipeline.
 
-Generates (no Auto-Match Review):
+Generates (no Auto-Match Review / no Slot Review):
   contact_sheet.html   — All pins grid, filter buttons, price desc
-  new_ctm.html         — ClickToMatch v2 (confidence-sorted queue, DINOv2 pre-select)
-  nts_review.html      — Slot Review (matched pins with selected slot > 0 only)
-  new_ctp.html         — ClickToPrice v2 (supports ?filter=no_match from CTM done link)
+  new_ctm.html         — ClickToMatch v2 (always shows slot 0)
+  new_ctp.html         — ClickToPrice v2 (Next skips; price only via listing/search/manual)
 
 Usage:
     python3 generate_review_pages_enhanced.py <path_to_PriceCollection_folder> [--firebase-export path.json]
@@ -134,13 +133,12 @@ def _build_pins(data: dict, scores: dict, orig_dp: dict = None) -> list:
             tier = sc.get('confidence_tier') or 'unknown'
             title = pin.get('listing_title') or (cl[0]['title'] if cl else '')
             ms = pin.get('match_status') or 'unreviewed'
-            # Pre-select DINOv2 best candidate for display (never auto-confirm).
-            if best_slot is not None and 0 <= best_slot < len(cl):
-                show_slot = best_slot
-            else:
-                show_slot = 0
-            best_dp = cl[show_slot]['p'] if cl and show_slot < len(cl) else slot0_p
-            show_thumb = cl[show_slot]['thumb'] if cl and show_slot < len(cl) else (cl[0]['thumb'] if cl else '')
+            # CTM always shows slot 0. DINOv2 best_slot is retained on the pin for
+            # analysis only — never used to pre-select a non-S0 listing in the UI.
+            show_slot = 0
+            best_dp = cl[0]['p'] if cl else slot0_p
+            show_thumb = cl[0]['thumb'] if cl else ''
+
             pins.append({
                 'pk':      pin['pin_key'],
                 'crop':    pin.get('crop_filename') or '',
@@ -233,7 +231,6 @@ async function _fbReadAllPins() {
 # All page links used by the hamburger menu
 _NAV_LINKS = [
     ('new_ctm.html',          'ClickToMatch v2'),
-    ('nts_review.html',       'Slot Review'),
     ('new_ctp.html',          'ClickToPrice v2'),
     ('contact_sheet.html',    'Contact Sheet'),
     ('index.html',            'Overlay'),
@@ -269,13 +266,37 @@ a.back-btn{color:#4a9eff;font-size:14px;text-decoration:none;padding:4px 0}
 '''
 
 _HAMBURGER_JS = '''\
-document.getElementById('ham-btn').addEventListener('click', function(e){
-  e.stopPropagation();
-  document.getElementById('nav-menu').classList.toggle('open');
-});
-document.getElementById('nav-menu').addEventListener('click', function(e){
-  if (e.target === this) this.classList.remove('open');
-});
+if (!window.__hamBound) {
+  window.__hamBound = true;
+  document.getElementById('ham-btn').addEventListener('click', function(e){
+    e.stopPropagation();
+    document.getElementById('nav-menu').classList.toggle('open');
+  });
+  document.getElementById('nav-menu').addEventListener('click', function(e){
+    if (e.target === this) this.classList.remove('open');
+  });
+}
+'''
+
+# Bind hamburger immediately after #nav-menu so it works before large PINS parse.
+_EARLY_HAMBURGER_SCRIPT = '''\
+<script>
+/* Early nav — must run before the large PINS payload blocks the main thread */
+(function(){
+  if (window.__hamBound) return;
+  window.__hamBound = true;
+  var ham = document.getElementById('ham-btn');
+  var menu = document.getElementById('nav-menu');
+  if (!ham || !menu) return;
+  ham.addEventListener('click', function(e){
+    e.stopPropagation();
+    menu.classList.toggle('open');
+  });
+  menu.addEventListener('click', function(e){
+    if (e.target === menu) menu.classList.remove('open');
+  });
+})();
+</script>
 '''
 
 def _head(title: str, extra_css: str = '') -> str:
@@ -358,6 +379,7 @@ def _gen_contact_sheet(pins, ctx, out_dir):
         + '  </div>\n'
         + '  <div class="filter-bar">\n'
         + '    <button class="fb active" data-f="">All</button>\n'
+        + '    <button class="fb" data-f="needs_review">Needs Review</button>\n'
         + '    <button class="fb" data-f="hidden">Hidden Disney</button>\n'
         + '    <button class="fb" data-f="wdi">WDI</button>\n'
         + '    <button class="fb" data-f="dec">DEC</button>\n'
@@ -373,6 +395,13 @@ const grid = document.getElementById('grid');
 const countEl = document.getElementById('hdr-count');
 let cards = [];
 
+function contactNeedsReview(ms, priceSource, displayPrice) {
+  if (ms === 'not_a_pin') return false;
+  if (priceSource === 'manual' || priceSource === 'listing') return false;
+  if (ms === 'match' || ms === 'auto_match' || ms === 'priced') return false;
+  return true; // no_match, unreviewed, or unknown
+}
+
 PINS.forEach(p => {
   const card = document.createElement('div');
   const msClass = ['match','no_match','auto_match'].includes(p.ms)
@@ -380,6 +409,7 @@ PINS.forEach(p => {
     : 'ms-unreviewed';
   card.className = 'card ' + msClass;
   card.dataset.cats = (p.cats || []).join(' ');
+  card.dataset.needsReview = contactNeedsReview(p.ms, null, p.price) ? '1' : '0';
   const img = document.createElement('img');
   img.loading = 'lazy';
   img.src = p.b64 || ('../crops/' + encodeURIComponent(p.crop));
@@ -391,7 +421,7 @@ PINS.forEach(p => {
   card.append(img, pr);
   card.dataset.pk = p.pk;
   card.addEventListener('click', () => {
-    window.location.href = 'new_ctp.html?pin=' + encodeURIComponent(p.pk);
+    window.location.href = 'new_ctp.html?filter=all&pin=' + encodeURIComponent(p.pk);
   });
   grid.appendChild(card);
   cards.push(card);
@@ -403,6 +433,7 @@ function applyFilter(f) {
     const cats = c.dataset.cats || '';
     let show;
     if (!f) show = true;
+    else if (f === 'needs_review') show = c.dataset.needsReview === '1';
     else if (f === 'premium') show = ['wdi','dec','dssh','le'].some(x => cats.includes(x));
     else show = cats.includes(f);
     c.style.display = show ? '' : 'none';
@@ -435,12 +466,13 @@ applyFilter('');
   const fbPins = await _fbReadAllPins();
   const keys = Object.keys(fbPins);
   if (!keys.length) { console.log('Contact sheet: no Firebase data for this run'); return; }
-  const priceMap = {}, msMap = {};
+  const priceMap = {}, msMap = {}, srcMap = {};
   for (const fbPin of Object.values(fbPins)) {
     const pk = fbPin.pin_key;
     if (!pk) continue;
     if (fbPin.display_price != null) priceMap[pk] = fbPin.display_price;
     if (fbPin.match_status)          msMap[pk]    = fbPin.match_status;
+    if (fbPin.price_source)          srcMap[pk]   = fbPin.price_source;
   }
   // Update summary counts
   const counts = {auto_match:0, match:0, no_match:0, not_a_pin:0, priced:0};
@@ -472,6 +504,10 @@ applyFilter('');
                 : ['match','auto_match'].includes(ms) ? 'ms-match' : 'ms-unreviewed';
       card.className = card.className.replace(/\bms-\S+/, cls);
     }
+    const ms = msMap[pk] || '';
+    const src = srcMap[pk] || null;
+    const dp = priceMap[pk];
+    card.dataset.needsReview = contactNeedsReview(ms || 'unreviewed', src, dp) ? '1' : '0';
   });
   // Re-sort grid by confirmed price descending
   const allCards = [...document.querySelectorAll('.card[data-pk]')];
@@ -506,7 +542,7 @@ def _gen_new_ctm(pins, ctx, out_dir):
     unrev.sort(key=lambda p: (p.get('best_sim') is None, -(p.get('best_sim') or 0)))
     records = []
     for p in unrev:
-        slot = int(p.get('show_slot') or 0)
+        slot = 0  # CTM always presents slot 0
         cands = p.get('cands') or []
         cand = cands[slot] if 0 <= slot < len(cands) else (cands[0] if cands else {})
         records.append({
@@ -596,6 +632,7 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden;
         + '  </div>\n'
         + '</div>\n'
         + _hamburger_html('new_ctm.html')
+        + _EARLY_HAMBURGER_SCRIPT
         + '<div id="prog-wrap"><div id="prog-fill"></div></div>\n'
         + '''
 <div id="photos">
@@ -671,26 +708,43 @@ function roundMoney2(n) {
   return Number.isFinite(x) ? Math.round(x + 1e-9) : 0;
 }
 
+function pipelineSlot0FromCtmPin(p) {
+  const price = roundMoney2(p.price);
+  return {
+    itemId: String(p.url || 'slot_0'),
+    title: String(p.title || ''),
+    itemUrl: String(p.url || ''),
+    thumbUrl: String(p.thumb || ''),
+    price: price,
+    total_price: price,
+    rank: 1,
+  };
+}
+
 /** Match accepts the eBay pin on screen → write that listing price for CTR overlay / CTP. */
 function recordAction(p, status) {
+  const slot0 = pipelineSlot0FromCtmPin(p);
   const base = {
     pin_key: p.pk,
     crop_filename: String(p.crop || ''),
     board_num: String(p.board_num || ''),
     pin_n: p.pin_n || 0,
     match_status: status,
+    ctm_match_status: status,
+    pipeline_slot0: slot0,
     matched_at: new Date().toISOString(),
   };
   if (status !== 'match') {
     return _fbWrite(p.pk, base);
   }
-  const slot = (p.show_slot != null ? p.show_slot : 0);
+  const slot = 0; // CTM always presents slot 0
   const price = roundMoney2(p.price);
   return _fbWrite(p.pk, Object.assign(base, {
     selected_candidate_idx: slot,
     display_price: price,
     listing_title: String(p.title || ''),
     ladder_preserve_zero: price === 0,
+    price_source: 'listing',
     selected_candidate: {
       itemId: String(p.url || ('slot_' + slot)),
       title: String(p.title || ''),
@@ -728,6 +782,8 @@ document.getElementById('btn-notpin').addEventListener('click', () => {
       board_num: String(p.board_num || ''),
       pin_n: p.pin_n || 0,
       match_status: 'not_a_pin',
+      ctm_match_status: 'not_a_pin',
+      pipeline_slot0: pipelineSlot0FromCtmPin(p),
       display_price: 0,
       marked_not_a_pin_at: new Date().toISOString(),
     });
@@ -1412,6 +1468,18 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
   border-radius:6px;padding:7px 10px;font-size:14px}
 #manual-btn{background:#333;border:none;color:#eee;border-radius:6px;
   padding:7px 12px;font-size:13px;cursor:pointer}
+/* ── Needs-price popup ── */
+#needs-price-popup{display:none;position:fixed;inset:0;z-index:300;
+  background:rgba(0,0,0,.72);align-items:center;justify-content:center;padding:20px}
+#needs-price-popup.show{display:flex}
+#needs-price-popup .np-card{background:#1a1a1a;border:1px solid #333;border-radius:12px;
+  padding:18px 16px;max-width:320px;width:100%;text-align:center}
+#needs-price-popup .np-msg{font-size:15px;font-weight:700;margin-bottom:14px;line-height:1.35}
+#needs-price-popup .np-actions{display:flex;flex-direction:column;gap:8px}
+#needs-price-popup button{height:42px;border:none;border-radius:8px;font-size:14px;
+  font-weight:700;cursor:pointer}
+#needs-price-first{background:#1e4fa0;color:#fff}
+#needs-price-dismiss{background:#2a2a2a;color:#aaa}
 /* ── Progress bar ── */
 #prog-wrap{height:4px;background:#2a2a2a;flex-shrink:0}
 #prog-fill{height:100%;background:#2a6eff;transition:width .25s;width:0%}
@@ -1435,6 +1503,7 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
         + '  </div>\n'
         + '</div>\n'
         + _hamburger_html('new_ctp.html')
+        + _EARLY_HAMBURGER_SCRIPT
         + '<div id="prog-wrap"><div id="prog-fill"></div></div>\n'
         + '''
 <div id="tile-area">
@@ -1477,6 +1546,15 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
     <button class="nav-btn" id="next-btn">Next →</button>
   </div>
 </div>
+<div id="needs-price-popup">
+  <div class="np-card">
+    <div class="np-msg" id="needs-price-msg"></div>
+    <div class="np-actions">
+      <button type="button" id="needs-price-first">Go to first</button>
+      <button type="button" id="needs-price-dismiss">Dismiss</button>
+    </div>
+  </div>
+</div>
 
 <script>
 ''' + data_js + f"const GRAY = '{_GRAY_PLACEHOLDER}';\n" + '''
@@ -1487,6 +1565,17 @@ let selPin = 0;
 let confirmed = {};   // pk -> origIdx  (or -1 for not-a-pin)
 let lastUndo  = null;
 let curFilter = 'nomatch';
+// Deep-link from overlay/contact sheet: ?pin= (optionally with ?filter=) → All
+(function peekCtpUrlFilter(){
+  const params = new URLSearchParams(window.location.search);
+  const pin = params.get('pin');
+  const f = params.get('filter');
+  if (pin && !f) { curFilter = 'all'; return; }
+  if (f === 'no_match' || f === 'nomatch') curFilter = 'nomatch';
+  else if (f === 'unrev' || f === 'unreviewed') curFilter = 'unrev';
+  else if (f === 'all') curFilter = 'all';
+  else if (['wdi','dec','dssh','le'].includes(f)) curFilter = f;
+})();
 let displayPins = [];
 
 function fmt(p) { return (p != null && !isNaN(p) && p >= 0) ? '$' + Math.round(p) : '$?'; }
@@ -1521,30 +1610,66 @@ function _isPinCommitted(p) {
 }
 
 function scriptDefaultIdx(p) {
-  return (p.show_slot != null ? p.show_slot : 0);
+  return 0; // CTM/CTP policy: slot 0 only
 }
 
-/** Accept pipeline default when leaving a pin unchanged (matches original ClickToPrice). */
-async function commitDefaultIfNeeded(p) {
-  if (!p || _isPinCommitted(p)) return;
-  const idx = scriptDefaultIdx(p);
-  const cand = (p.cands || [])[idx];
-  const dp = cand ? (cand.p || p.price || 0) : (p.price || 0);
-  await _fbCommitPin(p, {
-    selected_candidate_idx: idx,
-    display_price: dp,
-    match_status: 'match',
-    listing_title: cand ? cand.title : undefined,
-  });
-  updateFilterCounts();
+function pinNeedsReview(p) {
+  if (!p) return false;
+  if (confirmed[p.pk] === -1 || p.ms === 'not_a_pin') return false;
+  if (p.price_source === 'manual' || p.price_source === 'listing') return false;
+  if (confirmed[p.pk] != null && confirmed[p.pk] >= 0) return false;
+  if (p.ms === 'match' || p.ms === 'auto_match' || p.ms === 'priced') return false;
+  return true;
+}
+
+function countNeedsReview() {
+  return displayPins.filter(pinNeedsReview).length;
+}
+
+function slot0Snapshot(p) {
+  const c = (p.cands || [])[0] || {};
+  const pr = roundMoney2(c.p != null ? c.p : (p.slot0_p != null ? p.slot0_p : 0));
+  return {
+    itemId: String(c.itemId || c.url || 'slot_0'),
+    title: String(c.title || p.title || ''),
+    itemUrl: String(c.url || ''),
+    thumbUrl: String(c.thumb || ''),
+    price: pr,
+    total_price: pr,
+    rank: 1,
+  };
+}
+
+function hideNeedsPricePopup() {
+  const el = document.getElementById('needs-price-popup');
+  if (el) el.classList.remove('show');
+}
+
+function showNeedsPricePopup(n) {
+  const el = document.getElementById('needs-price-popup');
+  const msg = document.getElementById('needs-price-msg');
+  if (!el || !msg) return;
+  msg.textContent = n + ' still need a price';
+  el.classList.add('show');
+}
+
+function goToFirstNeedsReview() {
+  hideNeedsPricePopup();
+  const i = displayPins.findIndex(pinNeedsReview);
+  if (i < 0) return;
+  selPin = i;
+  sessionStorage.setItem(STORE_KEY, selPin);
+  renderPin(selPin);
 }
 
 async function advanceNext() {
   const p = displayPins[selPin];
   if (!p) return;
-  await commitDefaultIfNeeded(p);
+  // Next only navigates — never accepts a listing/price.
   if (selPin >= displayPins.length - 1) {
+    const n = countNeedsReview();
     renderPin(selPin);
+    if (n > 0) showNeedsPricePopup(n);
     return;
   }
   navigate(1);
@@ -1571,17 +1696,40 @@ function _fbCommitPin(p, opts) {
     pin_n: p.pin_n || 0,
     match_status: ms,
     selected_candidate_idx: idx,
-    selected_candidate: candToSelected(cand, idx),
+    selected_candidate: opts.skip_selected_candidate ? null : candToSelected(cand, idx),
     display_price: dp,
     listing_title: listingTitle,
     ladder_preserve_zero: dp === 0,
   };
   if (opts.not_a_pin) row.not_a_pin = true;
+  if (opts.price_source) {
+    row.price_source = opts.price_source;
+    p.price_source = opts.price_source;
+  }
+  // Write-once analysis: original CTM status + pipeline slot 0 snapshot.
+  const priorMs = opts.prior_ms != null ? opts.prior_ms : p.ms;
+  if (!p._ctmMatchStatus) {
+    const ctmKeep = ['match', 'no_match', 'not_a_pin', 'auto_match'];
+    if (ctmKeep.includes(priorMs)) {
+      row.ctm_match_status = priorMs;
+      p._ctmMatchStatus = priorMs;
+    }
+  }
+  if (!p._pipelineSlot0) {
+    row.pipeline_slot0 = slot0Snapshot(p);
+    p._pipelineSlot0 = row.pipeline_slot0;
+  }
+  if (opts.skip_selected_candidate) {
+    delete row.selected_candidate;
+  }
   p.price = dp;
   p.ms = ms;
   if (!opts.not_a_pin && opts.selected_candidate_idx != null && opts.selected_candidate_idx >= 0) {
     confirmed[p.pk] = opts.selected_candidate_idx;
     delete p._manualPrice;
+  }
+  if (opts.manual_only) {
+    confirmed[p.pk] = 0; // mark committed for needs-review; listing may be absent
   }
   return _fbWrite(p.pk, row).then(() => {
     _fbToast('Saved', '#1a5e1a');
@@ -1707,6 +1855,8 @@ function selectAndAdvance(p, origIdx) {
     display_price: newPrice,
     match_status: 'match',
     listing_title: cand ? cand.title : undefined,
+    price_source: 'listing',
+    prior_ms: prevMs,
   });
   updateFilterCounts();
   navigate(1);
@@ -1724,6 +1874,7 @@ function markNotAPin(p) {
     display_price: 0,
     not_a_pin: true,
     match_status: 'not_a_pin',
+    prior_ms: prevMs,
   });
   updateFilterCounts();
   navigate(1);
@@ -1744,11 +1895,13 @@ function navigate(dir) {
   renderPin(selPin);
 }
 
-document.getElementById('back-btn').addEventListener('click', () => { lastUndo = null; navigate(-1); });
+document.getElementById('back-btn').addEventListener('click', () => { lastUndo = null; hideNeedsPricePopup(); navigate(-1); });
 document.getElementById('next-btn').addEventListener('click', () => { advanceNext(); });
 document.getElementById('nap-btn').addEventListener('click', () => {
   const p = displayPins[selPin]; if (p) markNotAPin(p);
 });
+document.getElementById('needs-price-dismiss').addEventListener('click', hideNeedsPricePopup);
+document.getElementById('needs-price-first').addEventListener('click', goToFirstNeedsReview);
 
 document.getElementById('undo-btn').addEventListener('click', () => {
   if (!lastUndo) return;
@@ -1870,6 +2023,8 @@ function _kwPickListing(p, rawItem) {
     display_price: price,
     match_status: 'match',
     listing_title: kwCand.title,
+    price_source: 'listing',
+    prior_ms: prevMs,
   });
   updateFilterCounts();
   navigate(1);
@@ -1943,12 +2098,17 @@ document.getElementById('manual-btn').addEventListener('click', () => {
   const p = displayPins[selPin]; if (!p) return;
   const v = parseFloat(document.getElementById('manual-price').value);
   if (isNaN(v) || v <= 0) return;
-  const idx = (confirmed[p.pk] != null && confirmed[p.pk] >= 0) ? confirmed[p.pk] : chosenIdx(p);
+  const prevMs = p.ms;
   p._manualPrice = v;
+  // Manual price: keep learning snapshot of S0; do not pretend a listing was chosen.
   _fbCommitPin(p, {
-    selected_candidate_idx: idx,
+    selected_candidate_idx: 0,
     display_price: v,
-    match_status: 'match',
+    match_status: 'priced',
+    price_source: 'manual',
+    prior_ms: prevMs,
+    skip_selected_candidate: true,
+    manual_only: true,
   });
   document.getElementById('manual-price').value = '';
   updateFilterCounts();
@@ -2009,7 +2169,7 @@ applyFilter();
   applyFilter();
 })();
 
-// Jump to specific pin if ?pin= param present
+// Jump to specific pin if ?pin= param present → CTP All
 (function(){
   const pk = new URLSearchParams(window.location.search).get('pin');
   if (!pk) return;
@@ -2019,6 +2179,7 @@ applyFilter();
   document.querySelectorAll('.filt-btn').forEach(b => b.classList.remove('active'));
   const _allBtn = document.querySelector('.filt-btn[data-filter="all"]');
   if (_allBtn) _allBtn.classList.add('active');
+  try { history.replaceState(null, '', 'new_ctp.html?filter=all&pin=' + encodeURIComponent(pk)); } catch (err) {}
   applyFilter();
   const i = displayPins.findIndex(p => p.pk === pk);
   if (i < 0) return;
@@ -2052,13 +2213,19 @@ applyFilter();
     if (pi === -1) continue;
     if (fbPin.display_price != null) { PINS[pi].price = fbPin.display_price; updated++; }
     if (fbPin.match_status) {
-      PINS[pi].ms = fbPin.match_status === 'priced' ? 'match' : fbPin.match_status;
+      // Keep 'priced' distinct from 'match' for filters / needs-review.
+      PINS[pi].ms = fbPin.match_status;
     }
+    if (fbPin.price_source) PINS[pi].price_source = fbPin.price_source;
+    if (fbPin.ctm_match_status) PINS[pi]._ctmMatchStatus = fbPin.ctm_match_status;
+    if (fbPin.pipeline_slot0) PINS[pi]._pipelineSlot0 = fbPin.pipeline_slot0;
     if (fbPin.selected_candidate_idx != null) {
       PINS[pi]._fbCandIdx = fbPin.selected_candidate_idx;
     }
     if (fbPin.match_status === 'not_a_pin') {
       confirmed[PINS[pi].pk] = -1;
+    } else if (fbPin.price_source === 'manual' || fbPin.price_source === 'listing') {
+      confirmed[PINS[pi].pk] = fbPin.selected_candidate_idx != null ? fbPin.selected_candidate_idx : 0;
     } else if (fbPin.display_price != null && fbPin.match_status !== 'no_match') {
       // Restored from Firebase — treat as confirmed pricing (match or legacy priced).
       if (fbPin.selected_candidate_idx != null) {
@@ -2071,10 +2238,14 @@ applyFilter();
   console.log('CTP: hydrated ' + updated + ' pins from Firebase (' + keys.length + ' entries found)');
   // Re-apply filter with updated statuses then re-check ?pin= param
   const urlPk = new URLSearchParams(window.location.search).get('pin');
+  if (urlPk) curFilter = 'all';
+  document.querySelectorAll('.filt-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.filter === curFilter);
+  });
   applyFilter();
   if (urlPk) {
     const i = displayPins.findIndex(p => p.pk === urlPk);
-    if (i >= 0) { selPin = i; renderPin(i); }
+    if (i >= 0) { selPin = i; sessionStorage.setItem(STORE_KEY, i); renderPin(i); }
   }
 })();
 </script>
@@ -2154,19 +2325,32 @@ _OVERLAY_PIN_CLICK_OLD = """          e.onclick = () => {
 _OVERLAY_PIN_CLICK_NEW = """          e.onclick = () => {
             const pk = p.pin_key || '';
             window.location.href = pk
+              ? ('new_ctp.html?filter=all&pin=' + encodeURIComponent(pk))
+              : 'new_ctp.html?filter=all';
+          };"""
+
+# Older generator patch used ?pin= without filter=all (lands on No Match queue).
+_OVERLAY_PIN_CLICK_LEGACY = """          e.onclick = () => {
+            const pk = p.pin_key || '';
+            window.location.href = pk
               ? ('new_ctp.html?pin=' + encodeURIComponent(pk))
               : 'new_ctp.html';
           };"""
 
 
 def _patch_index_overlay_pin_click(index_path: pathlib.Path) -> None:
-    """Overlay harness: pin tap opens ClickToPrice v2 (unfiltered), focused via ?pin=."""
+    """Overlay harness: pin tap opens ClickToPrice v2 All, focused via ?filter=all&pin=."""
     if not index_path.is_file():
         print(f'WARN: {index_path} not found — skipping overlay pin-click patch')
         return
     html = index_path.read_text(encoding='utf-8')
     if _OVERLAY_PIN_CLICK_NEW.strip() in html:
         print('Overlay pin-click already patched')
+        return
+    if _OVERLAY_PIN_CLICK_LEGACY in html:
+        html = html.replace(_OVERLAY_PIN_CLICK_LEGACY, _OVERLAY_PIN_CLICK_NEW, 1)
+        index_path.write_text(html, encoding='utf-8')
+        print(f'Upgraded overlay pin-click to filter=all in {index_path.name}')
         return
     if _OVERLAY_PIN_CLICK_OLD not in html:
         print(f'WARN: {index_path.name} overlay pin onclick block not found — skipping')
@@ -2246,7 +2430,7 @@ def main():
     _gen_contact_sheet(pins, ctx, out_dir)
     _gen_new_ctm(pins, ctx, out_dir)
     _gen_new_ctp(pins, ctx, out_dir)
-    _gen_nts_review(pins, ctx, out_dir, fb_pins_by_pk)
+    # Slot Review retired — CTM always uses slot 0; do not generate nts_review.html.
     _patch_index_hamburger(idx_path)
     _patch_index_overlay_pin_click(idx_path)
     print('Done.')
