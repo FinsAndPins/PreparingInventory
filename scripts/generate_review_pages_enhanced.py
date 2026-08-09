@@ -79,9 +79,8 @@ def _extract_firebase(idx_path: pathlib.Path):
             print(f'  WARN: firebase extract failed: {e}')
     return {}, '', 'visual_baseline'
 
-# 360/q82 matches the classic Lexi harness thumbnails; 120/q72 looked pixelated on retina.
-def _embed_thumbnails(pins: list, crop_dir: pathlib.Path, size: int = 360) -> None:
-    """Resize each crop to a small thumbnail and embed as base64 data URI."""
+def _embed_thumbnails(pins: list, crop_dir: pathlib.Path, size: int = 720) -> None:
+    """Embed crops as base64 data URIs for CTM/CTP (max side ``size``; was 120/360)."""
     try:
         from PIL import Image
         import io, base64 as _b64lib
@@ -100,12 +99,12 @@ def _embed_thumbnails(pins: list, crop_dir: pathlib.Path, size: int = 360) -> No
             img = Image.open(path).convert('RGB')
             img.thumbnail((size, size), Image.LANCZOS)
             buf = io.BytesIO()
-            img.save(buf, 'JPEG', quality=82, optimize=True)
+            img.save(buf, 'JPEG', quality=85, optimize=True)
             p['crop_b64'] = 'data:image/jpeg;base64,' + _b64lib.b64encode(buf.getvalue()).decode()
             ok += 1
         except Exception:
             p['crop_b64'] = ''
-    print(f'  Embedded {ok}/{len(pins)} crop thumbnails')
+    print(f'  Embedded {ok}/{len(pins)} crop thumbnails (max side {size}px)')
 
 
 def _build_pins(data: dict, scores: dict, orig_dp: dict = None) -> list:
@@ -286,50 +285,6 @@ document.getElementById('ham-btn').addEventListener('click', function(e){
 document.getElementById('nav-menu').addEventListener('click', function(e){
   if (e.target === this) this.classList.remove('open');
 });
-'''
-
-# CTP↔Overlay return: shared session key (scroll + pin). Used by CTP back/hamburger and Overlay restore.
-_CTP_OVERLAY_RETURN_JS = r'''
-const CTP_OVERLAY_RETURN_KEY = 'ctp_overlay_return';
-function _readOverlayReturn() {
-  try { return JSON.parse(sessionStorage.getItem(CTP_OVERLAY_RETURN_KEY) || 'null'); }
-  catch (e) { return null; }
-}
-function _writeOverlayReturn(pinKey, scrollY) {
-  try {
-    sessionStorage.setItem(CTP_OVERLAY_RETURN_KEY, JSON.stringify({
-      pinKey: pinKey || '',
-      scrollY: Number(scrollY) || 0,
-      ts: Date.now()
-    }));
-  } catch (e) {}
-}
-function returnToOverlaySource() {
-  const cur = (typeof displayPins !== 'undefined' && displayPins[selPin]) ? displayPins[selPin] : null;
-  const pk = (cur && cur.pk)
-    || new URLSearchParams(window.location.search).get('pin')
-    || ((_readOverlayReturn() || {}).pinKey || '');
-  const prev = _readOverlayReturn() || {};
-  const scrollY = prev.scrollY || 0;
-  _writeOverlayReturn(pk, scrollY);
-  let url = 'index.html';
-  const q = [];
-  if (pk) q.push('pin=' + encodeURIComponent(pk));
-  if (scrollY) q.push('scroll=' + encodeURIComponent(String(Math.round(scrollY))));
-  if (q.length) url += '?' + q.join('&');
-  window.location.href = url;
-}
-function wireOverlayNavReturn() {
-  document.querySelectorAll('#nav-menu a').forEach(function(a) {
-    if ((a.getAttribute('href') || '') !== 'index.html') return;
-    if (a.dataset.overlayReturnWired) return;
-    a.dataset.overlayReturnWired = '1';
-    a.addEventListener('click', function(e) {
-      e.preventDefault();
-      returnToOverlaySource();
-    });
-  });
-}
 '''
 
 def _head(title: str, extra_css: str = '') -> str:
@@ -2086,20 +2041,9 @@ applyFilter();
   applyFilter();
 })();
 
-''' + _CTP_OVERLAY_RETURN_JS + '''
-// Jump to specific pin if ?pin= param present; always wire Overlay return nav.
+// Jump to specific pin if ?pin= param present
 (function(){
-  wireOverlayNavReturn();
-  const params = new URLSearchParams(window.location.search);
-  const pk = params.get('pin');
-  const fromOverlay = params.get('from') === 'overlay';
-  const hasReturn = !!_readOverlayReturn();
-  const _bb = document.getElementById('src-back-btn');
-  if (_bb && (fromOverlay || hasReturn || pk)) {
-    _bb.style.display = '';
-    _bb.title = 'Back to Overlay';
-    _bb.onclick = () => returnToOverlaySource();
-  }
+  const pk = new URLSearchParams(window.location.search).get('pin');
   if (!pk) return;
   // Force "all" filter so the pin is always visible regardless of its match_status
   curFilter = 'all';
@@ -2113,6 +2057,9 @@ applyFilter();
   selPin = i;
   sessionStorage.setItem(STORE_KEY, i);
   renderPin(i);
+  // Show back button — returns to overlay (or contact sheet) at original scroll position
+  const _bb = document.getElementById('src-back-btn');
+  if (_bb) { _bb.style.display = ''; _bb.onclick = () => history.back(); }
 })();
 </script>
 '''
@@ -2283,68 +2230,12 @@ _OVERLAY_PIN_CLICK_OLD = """          e.onclick = () => {
             showPage("ctp");
           };"""
 
-_OVERLAY_PIN_CLICK_MID = """          e.onclick = () => {
+_OVERLAY_PIN_CLICK_NEW = """          e.onclick = () => {
             const pk = p.pin_key || '';
             window.location.href = pk
               ? ('new_ctp.html?pin=' + encodeURIComponent(pk))
               : 'new_ctp.html';
           };"""
-
-_OVERLAY_PIN_CLICK_NEW = """          e.onclick = () => {
-            const pk = p.pin_key || '';
-            try {
-              sessionStorage.setItem('ctp_overlay_return', JSON.stringify({
-                pinKey: pk,
-                scrollY: window.scrollY || window.pageYOffset || 0,
-                ts: Date.now()
-              }));
-            } catch (err) {}
-            window.location.href = pk
-              ? ('new_ctp.html?pin=' + encodeURIComponent(pk) + '&from=overlay')
-              : 'new_ctp.html?from=overlay';
-          };"""
-
-_OVERLAY_PIN_MONEY_OLD = """    function overlayPinMoney(p) {
-      const raw = roundMoney2(p.display_price);
-      if (window.ctpWhatnotPreview) return String(whatnotLadderPrice(raw, p));
-      return String(raw);
-    }"""
-
-_OVERLAY_PIN_MONEY_NEW = """    function overlayPinMoney(p) {
-      if (isNotAPin(p)) return "";
-      const raw = roundMoney2(p.display_price);
-      if (window.ctpWhatnotPreview) return String(whatnotLadderPrice(raw, p));
-      return String(raw);
-    }"""
-
-_OVERLAY_NAP_PRICE_CSS = """
-    .pin .price:empty{display:none!important}"""
-
-_OVERLAY_RETURN_FOCUS_MARKER = '<!-- __overlay_return_focus__ -->'
-
-_OVERLAY_RETURN_FOCUS_JS = r'''
-    function restoreOverlayReturnFocus() {
-      const params = new URLSearchParams(window.location.search);
-      let pk = params.get("pin") || "";
-      let scrollY = params.get("scroll");
-      try {
-        const raw = sessionStorage.getItem("ctp_overlay_return");
-        if (raw) {
-          const o = JSON.parse(raw);
-          if (!pk && o && o.pinKey) pk = String(o.pinKey);
-          if ((scrollY == null || scrollY === "") && o && o.scrollY != null) scrollY = o.scrollY;
-        }
-      } catch (e) {}
-      if (pk) {
-        const i = pins.findIndex((x) => x.pin_key === pk);
-        if (i >= 0) pinIndex = i;
-      }
-      requestAnimationFrame(() => {
-        if (pk) scrollOverlayToPinKey(pk);
-        else if (scrollY != null && scrollY !== "") window.scrollTo(0, Number(scrollY) || 0);
-      });
-    }
-'''
 
 
 def _patch_index_overlay_pin_click(index_path: pathlib.Path) -> None:
@@ -2354,12 +2245,7 @@ def _patch_index_overlay_pin_click(index_path: pathlib.Path) -> None:
         return
     html = index_path.read_text(encoding='utf-8')
     if _OVERLAY_PIN_CLICK_NEW.strip() in html:
-        print('Overlay pin-click already patched (with return context)')
-        return
-    if _OVERLAY_PIN_CLICK_MID in html:
-        html = html.replace(_OVERLAY_PIN_CLICK_MID, _OVERLAY_PIN_CLICK_NEW, 1)
-        index_path.write_text(html, encoding='utf-8')
-        print(f'Upgraded overlay pin-click return context in {index_path.name}')
+        print('Overlay pin-click already patched')
         return
     if _OVERLAY_PIN_CLICK_OLD not in html:
         print(f'WARN: {index_path.name} overlay pin onclick block not found — skipping')
@@ -2367,76 +2253,6 @@ def _patch_index_overlay_pin_click(index_path: pathlib.Path) -> None:
     html = html.replace(_OVERLAY_PIN_CLICK_OLD, _OVERLAY_PIN_CLICK_NEW, 1)
     index_path.write_text(html, encoding='utf-8')
     print(f'Patched overlay pin-click in {index_path.name}')
-
-
-def _patch_index_overlay_hide_nap_prices(index_path: pathlib.Path) -> None:
-    """Overlay: hide price badges on Not-a-Pin boxes (no $0)."""
-    if not index_path.is_file():
-        print(f'WARN: {index_path} not found — skipping NaP price hide')
-        return
-    html = index_path.read_text(encoding='utf-8')
-    changed = False
-    if 'if (isNotAPin(p)) return "";' not in html and _OVERLAY_PIN_MONEY_OLD in html:
-        html = html.replace(_OVERLAY_PIN_MONEY_OLD, _OVERLAY_PIN_MONEY_NEW, 1)
-        changed = True
-    if '.pin .price:empty' not in html and _OVERLAY_PIN_CSS_ANCHOR in html:
-        html = html.replace(
-            _OVERLAY_PIN_CSS_ANCHOR,
-            _OVERLAY_PIN_CSS_ANCHOR + _OVERLAY_NAP_PRICE_CSS,
-            1,
-        )
-        changed = True
-    if changed:
-        index_path.write_text(html, encoding='utf-8')
-        print(f'Patched overlay NaP price hide in {index_path.name}')
-    else:
-        print('Overlay NaP price hide already present or anchors missing')
-
-
-def _patch_index_overlay_return_focus(index_path: pathlib.Path) -> None:
-    """Overlay: restore scroll/pin when returning from ClickToPrice v2."""
-    if not index_path.is_file():
-        print(f'WARN: {index_path} not found — skipping overlay return focus')
-        return
-    html = index_path.read_text(encoding='utf-8')
-    if _OVERLAY_RETURN_FOCUS_MARKER in html:
-        print('Overlay return focus already patched')
-        return
-    if 'function scrollOverlayToPinKey' not in html:
-        print(f'WARN: {index_path.name} missing scrollOverlayToPinKey — skipping return focus')
-        return
-    # Inject helper before paintAll
-    anchor = '    function paintAll() {'
-    if anchor not in html:
-        print(f'WARN: {index_path.name} missing paintAll — skipping return focus')
-        return
-    html = html.replace(
-        anchor,
-        _OVERLAY_RETURN_FOCUS_MARKER + _OVERLAY_RETURN_FOCUS_JS + anchor,
-        1,
-    )
-    # Call after each paintAll() that follows Firebase/bootstrap
-    html = html.replace(
-        '        paintAll();\n        setTimeout(() => {',
-        '        paintAll();\n        restoreOverlayReturnFocus();\n        setTimeout(() => {',
-        1,
-    )
-    html = html.replace(
-        '''          loadExisting()
-            .then(() => {
-              paintAll();
-              wirePinsFirebaseListener();
-            })''',
-        '''          loadExisting()
-            .then(() => {
-              paintAll();
-              restoreOverlayReturnFocus();
-              wirePinsFirebaseListener();
-            })''',
-        1,
-    )
-    index_path.write_text(html, encoding='utf-8')
-    print(f'Patched overlay return focus in {index_path.name}')
 
 
 def _patch_index_overlay_nomatch_indicator(index_path: pathlib.Path) -> None:
@@ -2556,8 +2372,6 @@ def main():
     _patch_index_hamburger(idx_path)
     _patch_index_overlay_pin_click(idx_path)
     _patch_index_overlay_nomatch_indicator(idx_path)
-    _patch_index_overlay_hide_nap_prices(idx_path)
-    _patch_index_overlay_return_focus(idx_path)
     print('Done.')
 
 
