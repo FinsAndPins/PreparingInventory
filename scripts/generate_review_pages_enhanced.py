@@ -1744,7 +1744,8 @@ function _fbCommitPin(p, opts) {
   p.ms = ms;
   if (!opts.not_a_pin && opts.selected_candidate_idx != null && opts.selected_candidate_idx >= 0) {
     confirmed[p.pk] = opts.selected_candidate_idx;
-    delete p._manualPrice;
+    // Keep manual override for My Pin tile; listing picks clear it.
+    if (opts.price_source !== 'manual') delete p._manualPrice;
   }
   if (opts.manual_only) {
     confirmed[p.pk] = 0; // mark committed for needs-review; listing may be absent
@@ -1782,7 +1783,11 @@ function renderTiles(p) {
   const isConf = confirmed[p.pk] != null;
   const coi = chosenIdx(p);
   const chosenCand = candsWithIdx[coi] || candsWithIdx[0];
-  const chosenPrice = isNaP ? 0 : (p._manualPrice != null ? p._manualPrice : (chosenCand ? (chosenCand.p || p.price) : p.price));
+  // My Pin shows display price (manual/listing commit), not raw candidate slot.
+  const chosenPrice = isNaP ? 0
+    : (p._manualPrice != null ? p._manualPrice
+    : (p.price != null && p.price !== '' ? p.price
+    : (chosenCand ? (chosenCand.p || 0) : 0)));
   const positivePrices = candsWithIdx.filter(c => c.p > 0).map(c => c.p);
   const cheapest = positivePrices.length ? Math.min(...positivePrices) : chosenPrice;
   const pinDelta = isNaP ? 0 : Math.max(0, chosenPrice - cheapest);
@@ -2291,7 +2296,12 @@ if (!displayPins.length && curFilter === 'nomatch') {
       // Keep 'priced' distinct from 'match' for filters / needs-review.
       PINS[pi].ms = fbPin.match_status;
     }
-    if (fbPin.price_source) PINS[pi].price_source = fbPin.price_source;
+    if (fbPin.price_source) {
+      PINS[pi].price_source = fbPin.price_source;
+      if (fbPin.price_source === 'manual' && fbPin.display_price != null) {
+        PINS[pi]._manualPrice = fbPin.display_price;
+      }
+    }
     if (fbPin.ctm_match_status) PINS[pi]._ctmMatchStatus = fbPin.ctm_match_status;
     if (fbPin.pipeline_slot0) PINS[pi]._pipelineSlot0 = fbPin.pipeline_slot0;
     if (fbPin.selected_candidate_idx != null) {
