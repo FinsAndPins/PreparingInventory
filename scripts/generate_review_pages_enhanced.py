@@ -33,9 +33,7 @@ def _cats(title: str) -> list:
     return result
 
 def _price(c: dict) -> float:
-    # Item price without shipping — buyers pay shipping either way (Whatnot or
-    # eBay), so the pin-only price is the comparable number across listings.
-    v = c.get('price') or c.get('total_price') or 0
+    v = c.get('total_price') or c.get('price') or 0
     try: return float(v)
     except: return 0.0
 
@@ -80,7 +78,11 @@ def _extract_firebase(idx_path: pathlib.Path):
     return {}, '', 'visual_baseline'
 
 def _embed_thumbnails(pins: list, crop_dir: pathlib.Path, size: int = 720) -> None:
-    """Embed crops as base64 data URIs for CTM/CTP (max side ``size``; was 120/360)."""
+    """Embed crops as base64 data URIs for CTM/CTP (max side ``size``).
+
+    Was 120px — looked fine next to tiny UI chrome but soft on phones beside sharp eBay
+    thumbs. 720 covers ~2–3× retina half-width without shipping full 1k+ crops in HTML.
+    """
     try:
         from PIL import Image
         import io, base64 as _b64lib
@@ -214,20 +216,9 @@ function _fbWrite(pk, fields) {
   const body = JSON.stringify(Object.assign({ pin_key: pk }, fields, { reviewed_by: _getUser() }));
   return fetch(url, { method: 'PATCH', body, headers: { 'Content-Type': 'application/json' } })
     .then(r => {
-      if (!r.ok) {
-        _fbToast('⚠ Save failed (' + r.status + ')', '#8b0000');
-        console.warn('Firebase write HTTP', r.status);
-        throw new Error('HTTP ' + r.status);
-      }
-      return r;
+      if (!r.ok) { _fbToast('⚠ Save failed (' + r.status + ')', '#8b0000'); console.warn('Firebase write HTTP', r.status); }
     })
-    .catch(e => {
-      if (!(e && e.message && String(e.message).startsWith('HTTP '))) {
-        _fbToast('⚠ Save failed — check network', '#8b0000');
-        console.warn('Firebase write failed', e);
-      }
-      throw e;
-    });
+    .catch(e => { _fbToast('⚠ Save failed — check network', '#8b0000'); console.warn('Firebase write failed', e); });
 }
 async function _fbReadAllPins() {
   const url = _DB_BASE + '/pin_pricing_tests/' + TEST_RUN_ID + '/' + APPROACH_ID + '/pins.json';
@@ -336,9 +327,8 @@ def _gen_contact_sheet(pins, ctx, out_dir):
 .card{position:relative;background:#1a1a1a;border-radius:4px;
   overflow:hidden;aspect-ratio:1;border:2px solid transparent}
 .card.ms-match{border-color:#2a7a2a}
-.card.ms-no_match{border-color:#666}
-.card.ms-nomatch-needs-ctp{border-color:#e33}
-.card.ms-nomatch-needs-ctp::after{content:'\\2715';position:absolute;top:2px;right:3px;color:#e33;font-size:10px;font-weight:bold;line-height:1;pointer-events:none;background:rgba(0,0,0,.65);border-radius:2px;padding:0 2px}
+.card.ms-no_match{border-color:#e33}
+.card.ms-no_match::after{content:'\2715';position:absolute;top:2px;right:3px;color:#e33;font-size:10px;font-weight:bold;line-height:1;pointer-events:none;background:rgba(0,0,0,.65);border-radius:2px;padding:0 2px}
 .card.ms-priced{border-color:#1a4a7a}
 .card.ms-unreviewed{border-color:#333}
 .card img{width:100%;height:100%;object-fit:contain;background:#222}
@@ -367,9 +357,7 @@ def _gen_contact_sheet(pins, ctx, out_dir):
         + '    </div></div>\n'
         + '  </div>\n'
         + '  <div class="filter-bar">\n'
-        + '    <button class="fb active" data-f="">All Pins</button>\n'
-        + '    <button class="fb" data-f="nomatch_needs_ctp">No Match — no listing</button>\n'
-        + '    <button class="fb" data-f="all_detections">All Detections</button>\n'
+        + '    <button class="fb active" data-f="">All</button>\n'
         + '    <button class="fb" data-f="hidden">Hidden Disney</button>\n'
         + '    <button class="fb" data-f="wdi">WDI</button>\n'
         + '    <button class="fb" data-f="dec">DEC</button>\n'
@@ -385,23 +373,13 @@ const grid = document.getElementById('grid');
 const countEl = document.getElementById('hdr-count');
 let cards = [];
 
-function pinNeedsCtpListingFromFb(fbPin) {
-  if (!fbPin || fbPin.match_status !== 'no_match') return false;
-  if (fbPin.selected_candidate_idx != null) return false;
-  if (fbPin.selected_candidate) return false;
-  return true;
-}
-
 PINS.forEach(p => {
   const card = document.createElement('div');
   const msClass = ['match','no_match','auto_match'].includes(p.ms)
     ? (p.ms === 'no_match' ? 'ms-no_match' : 'ms-match')
     : 'ms-unreviewed';
-  const needsCtp = p.ms === 'no_match';
-  card.className = 'card ' + msClass + (needsCtp ? ' ms-nomatch-needs-ctp' : '');
+  card.className = 'card ' + msClass;
   card.dataset.cats = (p.cats || []).join(' ');
-  card.dataset.ms = p.ms || 'unreviewed';
-  card.dataset.needsCtp = needsCtp ? '1' : '0';
   const img = document.createElement('img');
   img.loading = 'lazy';
   img.src = p.b64 || ('../crops/' + encodeURIComponent(p.crop));
@@ -424,9 +402,7 @@ function applyFilter(f) {
   cards.forEach((c) => {
     const cats = c.dataset.cats || '';
     let show;
-    if (!f) show = (c.dataset.ms || '') !== 'not_a_pin';
-    else if (f === 'all_detections') show = true;
-    else if (f === 'nomatch_needs_ctp') show = c.dataset.needsCtp === '1';
+    if (!f) show = true;
     else if (f === 'premium') show = ['wdi','dec','dssh','le'].some(x => cats.includes(x));
     else show = cats.includes(f);
     c.style.display = show ? '' : 'none';
@@ -459,13 +435,12 @@ applyFilter('');
   const fbPins = await _fbReadAllPins();
   const keys = Object.keys(fbPins);
   if (!keys.length) { console.log('Contact sheet: no Firebase data for this run'); return; }
-  const priceMap = {}, msMap = {}, needsCtpMap = {};
+  const priceMap = {}, msMap = {};
   for (const fbPin of Object.values(fbPins)) {
     const pk = fbPin.pin_key;
     if (!pk) continue;
     if (fbPin.display_price != null) priceMap[pk] = fbPin.display_price;
     if (fbPin.match_status)          msMap[pk]    = fbPin.match_status;
-    needsCtpMap[pk] = pinNeedsCtpListingFromFb(fbPin);
   }
   // Update summary counts
   const counts = {auto_match:0, match:0, no_match:0, not_a_pin:0, priced:0};
@@ -493,15 +468,9 @@ applyFilter('');
     }
     if (msMap[pk]) {
       const ms = msMap[pk];
-      card.dataset.ms = ms;
       const cls = ms === 'no_match' ? 'ms-no_match' : ms === 'priced' ? 'ms-priced'
                 : ['match','auto_match'].includes(ms) ? 'ms-match' : 'ms-unreviewed';
       card.className = card.className.replace(/\bms-\S+/, cls);
-    }
-    if (Object.prototype.hasOwnProperty.call(needsCtpMap, pk)) {
-      const needsCtp = !!needsCtpMap[pk];
-      card.dataset.needsCtp = needsCtp ? '1' : '0';
-      card.classList.toggle('ms-nomatch-needs-ctp', needsCtp);
     }
   });
   // Re-sort grid by confirmed price descending
@@ -535,10 +504,26 @@ def _gen_new_ctm(pins, ctx, out_dir):
     # Unreviewed first; within queue sort by DINOv2 confidence (high → low).
     unrev = [p for p in pins if p['ms'] not in SKIP_STATUS]
     unrev.sort(key=lambda p: (p.get('best_sim') is None, -(p.get('best_sim') or 0)))
-    records = [{'pk': p['pk'], 'crop': p['crop'], 'b64': p.get('crop_b64',''),
-                'price': p['price'], 'thumb': p['thumb'], 'ms': p['ms'],
-                'best_sim': p.get('best_sim'), 'tier': p.get('confidence_tier'),
-                'show_slot': p.get('show_slot', 0)} for p in unrev]
+    records = []
+    for p in unrev:
+        slot = int(p.get('show_slot') or 0)
+        cands = p.get('cands') or []
+        cand = cands[slot] if 0 <= slot < len(cands) else (cands[0] if cands else {})
+        records.append({
+            'pk': p['pk'],
+            'crop': p['crop'],
+            'b64': p.get('crop_b64', ''),
+            'price': p['price'],
+            'thumb': p['thumb'],
+            'ms': p['ms'],
+            'title': (cand.get('title') if cand else None) or p.get('title') or '',
+            'url': (cand.get('url') if cand else None) or '',
+            'board_num': p.get('board_num') or '',
+            'pin_n': int(p.get('pin_n') or 0),
+            'best_sim': p.get('best_sim'),
+            'tier': p.get('confidence_tier'),
+            'show_slot': slot,
+        })
 
     data_js = (
         "const PINS     = " + json.dumps(records, ensure_ascii=False) + ";\n"
@@ -681,23 +666,41 @@ function showPin(i) {
   if (_fill) { _fill.style.width = _pct+'%'; _fill.style.background = _pct===100 ? '#1a5e1a' : '#2a6eff'; }
 }
 
-function record(pk, status, pin) {
-  const fields = { match_status: status, matched_at: new Date().toISOString() };
-  // On Match, also persist the shown slot price so CTR / CTP see display_price
-  // without a separate ClickToPrice step (additive Firebase fields only).
-  if (status === 'match' && pin) {
-    const price = Number(pin.price);
-    const idx = (pin.show_slot != null) ? Number(pin.show_slot) : 0;
-    if (isFinite(price) && price > 0) fields.display_price = Math.round(price);
-    fields.selected_candidate_idx = isFinite(idx) ? idx : 0;
-    fields.selected_candidate = {
-      price: (isFinite(price) && price > 0) ? price : 0,
-      total_price: (isFinite(price) && price > 0) ? price : 0,
-      thumbUrl: pin.thumb || '',
-      rank: isFinite(idx) ? idx : 0,
-    };
+function roundMoney2(n) {
+  const x = Number(n);
+  return Number.isFinite(x) ? Math.round(x + 1e-9) : 0;
+}
+
+/** Match accepts the eBay pin on screen → write that listing price for CTR overlay / CTP. */
+function recordAction(p, status) {
+  const base = {
+    pin_key: p.pk,
+    crop_filename: String(p.crop || ''),
+    board_num: String(p.board_num || ''),
+    pin_n: p.pin_n || 0,
+    match_status: status,
+    matched_at: new Date().toISOString(),
+  };
+  if (status !== 'match') {
+    return _fbWrite(p.pk, base);
   }
-  return _fbWrite(pk, fields);
+  const slot = (p.show_slot != null ? p.show_slot : 0);
+  const price = roundMoney2(p.price);
+  return _fbWrite(p.pk, Object.assign(base, {
+    selected_candidate_idx: slot,
+    display_price: price,
+    listing_title: String(p.title || ''),
+    ladder_preserve_zero: price === 0,
+    selected_candidate: {
+      itemId: String(p.url || ('slot_' + slot)),
+      title: String(p.title || ''),
+      itemUrl: String(p.url || ''),
+      thumbUrl: String(p.thumb || ''),
+      price: price,
+      total_price: price,
+      rank: slot + 1,
+    },
+  }));
 }
 
 function doAction(status) {
@@ -706,7 +709,7 @@ function doAction(status) {
   history.push(idx);
   idx++;
   showPin(idx);
-  try { record(p.pk, status, p); } catch(e) { console.warn('CTM write failed', e); }
+  try { recordAction(p, status); } catch(e) { console.warn('CTM write failed', e); }
 }
 
 document.getElementById('btn-match').addEventListener('click', () => doAction('match'));
@@ -720,6 +723,10 @@ document.getElementById('btn-notpin').addEventListener('click', () => {
   showPin(idx);
   try {
     _fbWrite(p.pk, {
+      pin_key: p.pk,
+      crop_filename: String(p.crop || ''),
+      board_num: String(p.board_num || ''),
+      pin_n: p.pin_n || 0,
       match_status: 'not_a_pin',
       display_price: 0,
       marked_not_a_pin_at: new Date().toISOString(),
@@ -832,10 +839,7 @@ def _matched_slot_idx(pin: dict, fb_entry: dict | None = None) -> int | None:
     if idx is not None:
         idx = int(idx)
         return idx if idx > 0 else None
-    # Firebase match without index = slot-0 swipe in CTM — not a slot-review case.
-    if fb_entry and ms in _SLOT_REVIEW_MATCH:
-        return None
-    # No Firebase row yet — fall back to displayed slot for in-progress runs.
+    # CTM swipe-match does not write selected_candidate_idx — use displayed slot.
     for key in ('show_slot', 'best_slot', 'auto_slot'):
         v = pin.get(key)
         if v is not None:
@@ -932,12 +936,6 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
 .tile-hist{position:absolute;top:3px;left:3px;
   background:rgba(150,60,220,.92);color:#fff;font-size:8px;font-weight:700;
   padding:1px 4px;border-radius:2px;z-index:2;line-height:1.3}
-.tile-open{display:block;text-align:center;padding:4px 4px;font-size:10px;font-weight:700;
-  color:#9ec8ff;background:#0d1520;border-top:1px solid #222;text-decoration:none}
-.tile-open:active{background:#1a3050}
-.pm-ebay{flex-shrink:0;font-size:11px;color:#9ec8ff;text-decoration:none;white-space:nowrap;padding:0 2px}
-.pm-ebay[hidden]{display:none!important}
-.kw-open{display:inline-block;margin-top:6px;font-size:11px;font-weight:700;color:#9ec8ff;text-decoration:none}
 /* ── Bottom nav ── */
 #bottom-nav{flex-shrink:0;background:#111;border-top:1px solid #222;padding:5px 8px 8px}
 .var-bar{display:flex;gap:4px;overflow-x:auto;margin-bottom:5px;
@@ -1389,12 +1387,6 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
 .tile-hist{position:absolute;top:3px;left:3px;
   background:rgba(150,60,220,.92);color:#fff;font-size:8px;font-weight:700;
   padding:1px 4px;border-radius:2px;z-index:2;line-height:1.3}
-.tile-open{display:block;text-align:center;padding:4px 4px;font-size:10px;font-weight:700;
-  color:#9ec8ff;background:#0d1520;border-top:1px solid #222;text-decoration:none}
-.tile-open:active{background:#1a3050}
-.pm-ebay{flex-shrink:0;font-size:11px;color:#9ec8ff;text-decoration:none;white-space:nowrap;padding:0 2px}
-.pm-ebay[hidden]{display:none!important}
-.kw-open{display:inline-block;margin-top:6px;font-size:11px;font-weight:700;color:#9ec8ff;text-decoration:none}
 /* ── Bottom nav ── */
 #bottom-nav{flex-shrink:0;background:#111;border-top:1px solid #222;padding:5px 8px 8px}
 .nav-row{display:flex;gap:6px;margin-top:5px}
@@ -1437,7 +1429,6 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
         + '  <div id="pin-meta">\n'
         + '    <div class="pm-title" id="pd-title">—</div>\n'
         + '    <div class="pm-right">\n'
-        + '      <a class="pm-ebay" id="pd-ebay" href="#" target="_blank" rel="noopener" hidden>Open listing &#8599;</a>\n'
         + '      <span class="pm-idx" id="pd-idx"></span>\n'
         + '      <button class="pd-undo" id="undo-btn">&#8617; Undo</button>\n'
         + '    </div>\n'
@@ -1505,16 +1496,14 @@ function roundMoney2(n) {
   return Number.isFinite(x) ? Math.round(x + 1e-9) : 0;
 }
 
-function candToSelected(c, idx, priceOverride) {
-  const pr = priceOverride != null
-    ? roundMoney2(priceOverride)
-    : roundMoney2(Number((c && c.p) || 0));
-  if (!c && priceOverride == null) return {};
+function candToSelected(c, idx) {
+  if (!c) return {};
+  const pr = roundMoney2(Number(c.p || 0));
   return {
-    itemId: String((c && c.itemId) || (c && c.url) || ('slot_' + idx)),
-    title: String((c && c.title) || ''),
-    itemUrl: String((c && c.url) || ''),
-    thumbUrl: String((c && c.thumb) || ''),
+    itemId: String(c.itemId || c.url || ('slot_' + idx)),
+    title: String(c.title || ''),
+    itemUrl: String(c.url || ''),
+    thumbUrl: String(c.thumb || ''),
     price: pr,
     total_price: pr,
     rank: idx + 1,
@@ -1535,8 +1524,25 @@ function scriptDefaultIdx(p) {
   return (p.show_slot != null ? p.show_slot : 0);
 }
 
-function advanceNext() {
-  if (!displayPins[selPin]) return;
+/** Accept pipeline default when leaving a pin unchanged (matches original ClickToPrice). */
+async function commitDefaultIfNeeded(p) {
+  if (!p || _isPinCommitted(p)) return;
+  const idx = scriptDefaultIdx(p);
+  const cand = (p.cands || [])[idx];
+  const dp = cand ? (cand.p || p.price || 0) : (p.price || 0);
+  await _fbCommitPin(p, {
+    selected_candidate_idx: idx,
+    display_price: dp,
+    match_status: 'match',
+    listing_title: cand ? cand.title : undefined,
+  });
+  updateFilterCounts();
+}
+
+async function advanceNext() {
+  const p = displayPins[selPin];
+  if (!p) return;
+  await commitDefaultIfNeeded(p);
   if (selPin >= displayPins.length - 1) {
     renderPin(selPin);
     return;
@@ -1558,7 +1564,6 @@ function _fbCommitPin(p, opts) {
   const listingTitle = opts.listing_title != null
     ? String(opts.listing_title)
     : String(cand.title || p.title || '');
-  const scPrice = opts.manual_override ? dp : null;
   const row = {
     pin_key: p.pk,
     board_num: String(p.board_num || ''),
@@ -1566,7 +1571,7 @@ function _fbCommitPin(p, opts) {
     pin_n: p.pin_n || 0,
     match_status: ms,
     selected_candidate_idx: idx,
-    selected_candidate: candToSelected(cand, idx, scPrice),
+    selected_candidate: candToSelected(cand, idx),
     display_price: dp,
     listing_title: listingTitle,
     ladder_preserve_zero: dp === 0,
@@ -1574,10 +1579,9 @@ function _fbCommitPin(p, opts) {
   if (opts.not_a_pin) row.not_a_pin = true;
   p.price = dp;
   p.ms = ms;
-  p._fbDirty = true;
   if (!opts.not_a_pin && opts.selected_candidate_idx != null && opts.selected_candidate_idx >= 0) {
     confirmed[p.pk] = opts.selected_candidate_idx;
-    if (!opts.manual_override) delete p._manualPrice;
+    delete p._manualPrice;
   }
   return _fbWrite(p.pk, row).then(() => {
     _fbToast('Saved', '#1a5e1a');
@@ -1598,24 +1602,8 @@ function renderPin(pi) {
   document.getElementById('pd-title').textContent = p.title || p.pk;
   document.getElementById('undo-btn').style.display =
     (lastUndo && lastUndo.pk === p.pk) ? 'inline' : 'none';
-  const ebayA = document.getElementById('pd-ebay');
-  if (ebayA) {
-    const isNaPHdr = confirmed[p.pk] === -1;
-    const coiHdr = chosenIdx(p);
-    const chosenHdr = (p.cands || [])[coiHdr];
-    const listingUrl = (!isNaPHdr && chosenHdr && chosenHdr.url) ? String(chosenHdr.url) : '';
-    if (listingUrl) {
-      ebayA.href = listingUrl;
-      ebayA.hidden = false;
-    } else {
-      ebayA.removeAttribute('href');
-      ebayA.hidden = true;
-    }
-  }
-  // Leave eBay search empty by default (easier to type a fresh query).
-  // navigate() already clears the field when changing pins; do not prefill title.
   const ei = document.getElementById('ebay-input');
-  if (ei && !ei.dataset.edited) ei.value = '';
+  if (ei && !ei.dataset.edited) ei.value = p.title || '';
   renderTiles(p);
   document.getElementById('tile-area').scrollTop = 0;
 }
@@ -1628,10 +1616,7 @@ function renderTiles(p) {
   const isConf = confirmed[p.pk] != null;
   const coi = chosenIdx(p);
   const chosenCand = candsWithIdx[coi] || candsWithIdx[0];
-  const chosenPrice = isNaP ? 0
-    : (p._manualPrice != null ? p._manualPrice
-      : (isConf && p.price != null ? p.price
-        : (chosenCand ? (chosenCand.p || p.price) : p.price)));
+  const chosenPrice = isNaP ? 0 : (p._manualPrice != null ? p._manualPrice : (chosenCand ? (chosenCand.p || p.price) : p.price));
   const positivePrices = candsWithIdx.filter(c => c.p > 0).map(c => c.p);
   const cheapest = positivePrices.length ? Math.min(...positivePrices) : chosenPrice;
   const pinDelta = isNaP ? 0 : Math.max(0, chosenPrice - cheapest);
@@ -1693,16 +1678,6 @@ function renderTiles(p) {
     const sn = document.createElement('div');
     sn.className = 'tile-sn'; sn.textContent = 'S'+c.origIdx;
     tile.append(img, pbar, sn);
-    if (c.url) {
-      const open = document.createElement('a');
-      open.className = 'tile-open';
-      open.href = c.url;
-      open.target = '_blank';
-      open.rel = 'noopener';
-      open.textContent = 'Open listing';
-      open.addEventListener('click', e => e.stopPropagation());
-      tile.appendChild(open);
-    }
     if (isChosen) {
       const star = document.createElement('div');
       star.className = 'tile-star'; star.textContent = '★';
@@ -1914,13 +1889,7 @@ function _kwRenderPage(p) {
     const card = document.createElement('div');
     card.className = 'kwCard';
     const price = Math.round(parseFloat(it.price)||0);
-    const openUrl = String(it.source || it.url || '');
-    const openHtml = openUrl
-      ? '<a class="kw-open" href="'+openUrl.replace(/&/g,'&amp;').replace(/"/g,'&quot;')+'" target="_blank" rel="noopener">Open listing &#8599;</a>'
-      : '';
-    card.innerHTML = '<img src="'+(it.thumb||'')+'" alt="" onerror="this.style.display=\\'none\\'"><div class="kw-p">$'+price+'</div><div class="kw-t">'+(it.title||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</div>'+openHtml;
-    const openA = card.querySelector('.kw-open');
-    if (openA) openA.addEventListener('click', e => e.stopPropagation());
+    card.innerHTML = '<img src="'+(it.thumb||'')+'" alt="" onerror="this.style.display=\\'none\\'"><div class="kw-p">$'+price+'</div><div class="kw-t">'+(it.title||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</div>';
     card.addEventListener('click', () => _kwPickListing(p, it));
     grid.appendChild(card);
   });
@@ -1980,8 +1949,7 @@ document.getElementById('manual-btn').addEventListener('click', () => {
     selected_candidate_idx: idx,
     display_price: v,
     match_status: 'match',
-    manual_override: true,
-  }).catch(() => {});
+  });
   document.getElementById('manual-price').value = '';
   updateFilterCounts();
   renderPin(selPin);
@@ -2082,7 +2050,6 @@ applyFilter();
     if (!pk) continue;
     const pi = PINS.findIndex(p => p.pk === pk);
     if (pi === -1) continue;
-    if (PINS[pi]._fbDirty) continue;
     if (fbPin.display_price != null) { PINS[pi].price = fbPin.display_price; updated++; }
     if (fbPin.match_status) {
       PINS[pi].ms = fbPin.match_status === 'priced' ? 'match' : fbPin.match_status;
@@ -2178,52 +2145,6 @@ def _patch_index_hamburger(index_path: pathlib.Path) -> None:
     print(f'Injected overlay hamburger into {index_path.name}')
 
 
-_OVERLAY_NOMATCH_MARKER = '<!-- __nomatch_ctp_indicator__ -->'
-
-_OVERLAY_NOMATCH_CSS = """
-    .pin.nomatch-needs-ctp{border-color:#e33 !important;box-shadow:0 0 0 1px #e33}
-    .pin.nomatch-needs-ctp::after{content:'\\2715';position:absolute;top:0;right:0;color:#fff;background:#e33;
-      font-size:11px;font-weight:bold;line-height:1;padding:1px 4px;border-radius:0 6px 0 4px;pointer-events:none}
-    .overlayRoot.boxes-off .pin.nomatch-needs-ctp::after{display:none}"""
-
-_OVERLAY_NOMATCH_HELPER = """
-    function pinNeedsCtpListing(p) {
-      if ((p.match_status || "unreviewed") !== "no_match") return false;
-      if (p._fbHasListingPick) return false;
-      return true;
-    }
-"""
-
-_OVERLAY_RENDER_PIN_OLD = """          e.className = "pin";
-          e.style.left = (100 * p.bbox.x / b.thumb_w) + "%";"""
-
-_OVERLAY_RENDER_PIN_NEW = """          e.className = "pin" + (pinNeedsCtpListing(p) ? " nomatch-needs-ctp" : "");
-          e.style.left = (100 * p.bbox.x / b.thumb_w) + "%";"""
-
-_OVERLAY_APPLY_PIN_OLD = """    function applyPinRecord(rec) {
-      if (!rec || !rec.pin_key) return false;
-      const p = pinByKey(rec.pin_key);
-      if (!p) return false;
-      if (rec.selected_candidate && typeof rec.selected_candidate === "object") {"""
-
-_OVERLAY_APPLY_PIN_NEW = """    function applyPinRecord(rec) {
-      if (!rec || !rec.pin_key) return false;
-      const p = pinByKey(rec.pin_key);
-      if (!p) return false;
-      if (Object.prototype.hasOwnProperty.call(rec, "selected_candidate_idx")) {
-        p._fbHasListingPick = (typeof rec.selected_candidate_idx === "number");
-      }
-      if (rec.selected_candidate && typeof rec.selected_candidate === "object") {
-        p._fbHasListingPick = true;"""
-
-_OVERLAY_PIN_CSS_ANCHOR = (
-    '.pin{position:absolute;transform:translate(-50%,-50%);display:flex;box-sizing:border-box;'
-    'border-radius:8px;cursor:pointer;justify-content:var(--ov-price-h);align-items:var(--ov-price-v);'
-    'border:2px solid rgba(99,164,255,.85)}'
-)
-
-_OVERLAY_RENDER_ANCHOR = '    function renderOverlay() {'
-
 _OVERLAY_PIN_CLICK_OLD = """          e.onclick = () => {
             const i = pins.findIndex(x => x.pin_key === p.pin_key);
             if (i >= 0) pinIndex = i;
@@ -2253,49 +2174,6 @@ def _patch_index_overlay_pin_click(index_path: pathlib.Path) -> None:
     html = html.replace(_OVERLAY_PIN_CLICK_OLD, _OVERLAY_PIN_CLICK_NEW, 1)
     index_path.write_text(html, encoding='utf-8')
     print(f'Patched overlay pin-click in {index_path.name}')
-
-
-def _patch_index_overlay_nomatch_indicator(index_path: pathlib.Path) -> None:
-    """Overlay harness: red border + X on no_match pins without a CTP listing pick."""
-    if not index_path.is_file():
-        print(f'WARN: {index_path} not found — skipping overlay nomatch indicator')
-        return
-    html = index_path.read_text(encoding='utf-8')
-    if _OVERLAY_NOMATCH_MARKER in html:
-        print('Overlay nomatch-needs-ctp indicator already patched')
-        return
-    changed = False
-    if _OVERLAY_PIN_CSS_ANCHOR in html and '.pin.nomatch-needs-ctp' not in html:
-        html = html.replace(
-            _OVERLAY_PIN_CSS_ANCHOR,
-            _OVERLAY_PIN_CSS_ANCHOR + _OVERLAY_NOMATCH_CSS,
-            1,
-        )
-        changed = True
-    if _OVERLAY_RENDER_ANCHOR in html and 'function pinNeedsCtpListing' not in html:
-        html = html.replace(
-            _OVERLAY_RENDER_ANCHOR,
-            _OVERLAY_NOMATCH_MARKER + _OVERLAY_NOMATCH_HELPER + _OVERLAY_RENDER_ANCHOR,
-            1,
-        )
-        changed = True
-    if _OVERLAY_RENDER_PIN_NEW.strip() not in html:
-        if _OVERLAY_RENDER_PIN_OLD in html:
-            html = html.replace(_OVERLAY_RENDER_PIN_OLD, _OVERLAY_RENDER_PIN_NEW, 1)
-            changed = True
-        else:
-            print(f'WARN: {index_path.name} overlay pin class block not found — skipping')
-    if 'Object.prototype.hasOwnProperty.call(rec, "selected_candidate_idx")' not in html:
-        if _OVERLAY_APPLY_PIN_OLD in html:
-            html = html.replace(_OVERLAY_APPLY_PIN_OLD, _OVERLAY_APPLY_PIN_NEW, 1)
-            changed = True
-        else:
-            print(f'WARN: {index_path.name} applyPinRecord block not found — skipping')
-    if changed:
-        index_path.write_text(html, encoding='utf-8')
-        print(f'Patched overlay nomatch-needs-ctp indicator in {index_path.name}')
-    else:
-        print(f'WARN: no overlay nomatch-needs-ctp changes applied to {index_path.name}')
 
 
 # ── Entry point ────────────────────────────────────────────────────────────
@@ -2371,7 +2249,6 @@ def main():
     _gen_nts_review(pins, ctx, out_dir, fb_pins_by_pk)
     _patch_index_hamburger(idx_path)
     _patch_index_overlay_pin_click(idx_path)
-    _patch_index_overlay_nomatch_indicator(idx_path)
     print('Done.')
 
 
