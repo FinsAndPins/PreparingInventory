@@ -17,11 +17,15 @@
     .boardHdrL,.boardHdrR{position:absolute;top:8px;background:rgba(0,0,0,.65);border:1px solid #2a2a33;border-radius:8px;padding:6px 8px;font-size:12px}
     .boardHdrL{left:8px}
     .boardHdrR{right:8px}
-    .overlayRoot{--ov-price-h:center;--ov-price-v:center;--ov-price-font:16px;--ov-price-pad-x:10px;--ov-price-pad-y:5px;--ov-price-bg:#ffeb3b;--ov-price-fg:#111111;--ov-price-border:#222222}
-    .pin{position:absolute;transform:translate(-50%,-50%);display:flex;box-sizing:border-box;border-radius:8px;cursor:pointer;justify-content:var(--ov-price-h);align-items:var(--ov-price-v);border:2px solid rgba(99,164,255,.85)}
+    /* Price badges match CTR 20260810 .pin-pb (dark box, white + gold sale) */
+    .overlayRoot{--ov-price-h:right;--ov-price-v:top;--ov-price-font:10px;--ov-price-pad-x:5px;--ov-price-pad-y:1px;--ov-price-bg:rgba(0,0,0,0.78);--ov-price-fg:#ffffff;--ov-price-border:transparent}
+    .pin{position:absolute;transform:translate(-50%,-50%);display:block;box-sizing:border-box;border-radius:8px;cursor:pointer;border:2px solid rgba(99,164,255,.85)}
     .overlayRoot.boxes-off .pin{border-color:transparent;background:transparent}
-    .price{position:relative;box-sizing:border-box;font-weight:700;margin:0;border-radius:7px;padding:var(--ov-price-pad-y) var(--ov-price-pad-x);font-size:var(--ov-price-font);background:var(--ov-price-bg);color:var(--ov-price-fg);border:1px solid var(--ov-price-border);white-space:nowrap;line-height:1.35}
-    .price s{opacity:.75;font-weight:600}
+    .price{position:absolute;top:2px;right:2px;z-index:2;box-sizing:border-box;font-weight:700;margin:0;
+      border-radius:4px;padding:1px 5px;font-size:10px;line-height:1.4;
+      background:rgba(0,0,0,0.78);color:#fff;border:none;
+      white-space:nowrap;pointer-events:none}
+    .price s{opacity:.75;font-weight:600;color:#fff}
     .price .pb-d{color:#ffd700;margin-left:3px}
     .overlayRoot.prices-off .price{display:none!important}
     .overlayPrefDetails summary::-webkit-details-marker{display:none}
@@ -389,14 +393,15 @@
       if (!root || !p) return;
       root.classList.toggle("boxes-off", !p.showBoxes);
       root.classList.toggle("prices-off", !p.showPrices);
-      root.style.setProperty("--ov-price-h", OV_J[p.priceH] || "center");
-      root.style.setProperty("--ov-price-v", OV_A[p.priceV] || "center");
-      root.style.setProperty("--ov-price-font", (Number(p.priceFontPx) || 16) + "px");
-      root.style.setProperty("--ov-price-pad-x", (Number(p.pricePadX) || 10) + "px");
-      root.style.setProperty("--ov-price-pad-y", (Number(p.pricePadY) || 5) + "px");
-      root.style.setProperty("--ov-price-bg", p.priceBg || "#ffeb3b");
-      root.style.setProperty("--ov-price-fg", p.priceFg || "#111111");
-      root.style.setProperty("--ov-price-border", p.priceBorder || "#222222");
+      // Badge chrome locked to CTR .pin-pb for readability (this show only).
+      root.style.setProperty("--ov-price-h", "right");
+      root.style.setProperty("--ov-price-v", "top");
+      root.style.setProperty("--ov-price-font", "10px");
+      root.style.setProperty("--ov-price-pad-x", "5px");
+      root.style.setProperty("--ov-price-pad-y", "1px");
+      root.style.setProperty("--ov-price-bg", "rgba(0,0,0,0.78)");
+      root.style.setProperty("--ov-price-fg", "#ffffff");
+      root.style.setProperty("--ov-price-border", "transparent");
     }
     function commitOverlayPrefsFromForm() {
       const p = readOverlayPrefsFromForm();
