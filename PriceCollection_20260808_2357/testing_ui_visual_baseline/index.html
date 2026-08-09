@@ -20,7 +20,9 @@
     .overlayRoot{--ov-price-h:center;--ov-price-v:center;--ov-price-font:16px;--ov-price-pad-x:10px;--ov-price-pad-y:5px;--ov-price-bg:#ffeb3b;--ov-price-fg:#111111;--ov-price-border:#222222}
     .pin{position:absolute;transform:translate(-50%,-50%);display:flex;box-sizing:border-box;border-radius:8px;cursor:pointer;justify-content:var(--ov-price-h);align-items:var(--ov-price-v);border:2px solid rgba(99,164,255,.85)}
     .overlayRoot.boxes-off .pin{border-color:transparent;background:transparent}
-    .price{position:relative;box-sizing:border-box;font-weight:700;margin:0;border-radius:7px;padding:var(--ov-price-pad-y) var(--ov-price-pad-x);font-size:var(--ov-price-font);background:var(--ov-price-bg);color:var(--ov-price-fg);border:1px solid var(--ov-price-border)}
+    .price{position:relative;box-sizing:border-box;font-weight:700;margin:0;border-radius:7px;padding:var(--ov-price-pad-y) var(--ov-price-pad-x);font-size:var(--ov-price-font);background:var(--ov-price-bg);color:var(--ov-price-fg);border:1px solid var(--ov-price-border);white-space:nowrap;line-height:1.35}
+    .price s{opacity:.75;font-weight:600}
+    .price .pb-d{color:#ffd700;margin-left:3px}
     .overlayRoot.prices-off .price{display:none!important}
     .overlayPrefDetails summary::-webkit-details-marker{display:none}
     .overlayPrefDetails summary{list-style:none}
@@ -122,9 +124,9 @@
     <button class="btn" id="navBatch">Batch Review</button>
     <span class="pill" id="runPill"></span>
     <label class="pill" style="display:flex;align-items:center;gap:8px;margin:0;font-weight:normal"><span style="font-size:12px;opacity:.9">Name</span><input id="ctpUserInput" type="text" autocomplete="username" placeholder="you" style="width:min(140px,30vw);padding:5px 8px;border-radius:8px;border:1px solid #2a2a33;background:#0f0f12;color:#eee;font-size:13px" title="Saved in this browser (no popup)"/></label>
-    <label class="pill" style="display:flex;align-items:center;gap:8px;margin:0;font-weight:normal" title="When on, pin badges and headers use rounding rules ($10 min, nearest $5). Stored list prices stay raw eBay. Not a Pin stays $0 and is excluded from pin counts / W totals. If Lexi sets price to $0 (bad crop), preview stays $0; pipeline $0 unchanged still ladders to $10.">
+    <label class="pill" style="display:flex;align-items:center;gap:8px;margin:0;font-weight:normal" title="When on, badges match CTR 20260810: list = ceil to $5 (min $10), then 25% off = round(list×0.75). Shows list + sale. Stored Firebase prices stay raw eBay. Not a Pin stays $0. Lexi $0 with ladder_preserve_zero stays $0.">
       <input type="checkbox" id="ctpWhatnotPreviewChk"/>
-      <span style="font-size:12px">Apply rounding rules</span>
+      <span style="font-size:12px">Apply CTR rounding (list + 25% off)</span>
     </label>
     <span class="pill">All clicks -> Firebase</span>
   </div>
@@ -458,18 +460,26 @@
       return !!(p && (p.not_a_pin === true || p.match_status === "not_a_pin"));
     }
     /**
-     * Whatnot upload ladder (display-only when preview is on): min $10, nearest $5.
-     * Exceptions that stay $0: Not a Pin; or Lexi explicitly sets list price to $0
-     * (partial/wrong crop) when pin.ladder_preserve_zero is true.
-     * Pipeline/listing-sourced $0 (without those flags) still ladders to min $10.
+     * CTR 20260810 list rounding (display-only when preview is on): min $10, ceil to $5.
+     * Same as ClickToClaim _roundForShow. Exceptions that stay $0: Not a Pin; or Lexi
+     * sets list to $0 when pin.ladder_preserve_zero is true.
      */
     function whatnotLadderPrice(v, pin) {
       if (isNotAPin(pin)) return 0;
-      const n = Math.round(Number(v));
-      if (!Number.isFinite(n)) return 10;
+      const n = Number(v);
+      if (!Number.isFinite(n) || n <= 0) {
+        if (n === 0 && pin && pin.ladder_preserve_zero) return 0;
+        return 10;
+      }
       if (n === 0 && pin && pin.ladder_preserve_zero) return 0;
-      const clamped = Math.max(10, n);
-      return Math.round(clamped / 5) * 5;
+      if (n < 10) return 10;
+      return Math.ceil(n / 5) * 5;
+    }
+    /** CTR sale: round(list × 0.75) after list rounding. */
+    function ctrSalePrice(v, pin) {
+      const list = whatnotLadderPrice(v, pin);
+      if (!list) return 0;
+      return Math.round(list * 0.75);
     }
     function fmtListPriceRaw(v) {
       return String(roundMoney2(v));
@@ -485,18 +495,44 @@
       window.ctpWhatnotPreview = !!on;
     }
     window.ctpWhatnotPreview = readWhatnotPreview();
-    /** Pin badge: whole dollars, no $ (readability). Board header totals use moneyListRaw with $. */
+    /** Fill pin badge: raw dollars, or CTR list (struck) + 25% off sale. */
+    function fillOverlayPinBadge(pr, p) {
+      pr.textContent = "";
+      const raw = roundMoney2(p.display_price);
+      if (!window.ctpWhatnotPreview) {
+        pr.textContent = String(raw);
+        return;
+      }
+      const list = whatnotLadderPrice(raw, p);
+      const sale = ctrSalePrice(raw, p);
+      if (!list && !sale) {
+        pr.textContent = "0";
+        return;
+      }
+      const s = document.createElement("s");
+      s.textContent = "$" + list;
+      const d = document.createElement("span");
+      d.className = "pb-d";
+      d.textContent = "$" + sale;
+      pr.appendChild(s);
+      pr.appendChild(d);
+    }
+    /** @deprecated text-only helper; prefer fillOverlayPinBadge */
     function overlayPinMoney(p) {
       const raw = roundMoney2(p.display_price);
-      if (window.ctpWhatnotPreview) return String(whatnotLadderPrice(raw, p));
+      if (window.ctpWhatnotPreview) {
+        const list = whatnotLadderPrice(raw, p);
+        return "$" + list + " → $" + ctrSalePrice(raw, p);
+      }
       return String(raw);
     }
-    /** One-line price summary for pin lists / batch (raw + optional Whatnot preview). */
+    /** One-line price summary for pin lists / batch. */
     function pinPriceMetaHtml(p) {
       const raw = roundMoney2(p.display_price || 0);
       let s = "List (eBay): " + moneyListRaw(raw);
       if (window.ctpWhatnotPreview) {
-        s += " · Whatnot preview " + moneyListRaw(whatnotLadderPrice(raw, p));
+        const list = whatnotLadderPrice(raw, p);
+        s += " · CTR list " + moneyListRaw(list) + " · 25% off " + moneyListRaw(ctrSalePrice(raw, p));
       }
       return s;
     }
@@ -505,7 +541,8 @@
       if (!wspan || !p) return;
       if (window.ctpWhatnotPreview) {
         const raw = roundMoney2(p.display_price || 0);
-        wspan.textContent = " · Whatnot preview: " + moneyListRaw(whatnotLadderPrice(raw, p));
+        const list = whatnotLadderPrice(raw, p);
+        wspan.textContent = " · CTR list " + moneyListRaw(list) + " · 25% off " + moneyListRaw(ctrSalePrice(raw, p));
       } else {
         wspan.textContent = "";
       }
@@ -527,6 +564,10 @@
       return roundMoney2((plist || []).filter((p) => !isNotAPin(p)).reduce((a, p) => a + roundMoney2(p.display_price), 0));
     }
     function sumWhatnotLadderPrices(plist) {
+      // Sum of CTR 25% off sale prices (matches what users see as auction price).
+      return (plist || []).filter((p) => !isNotAPin(p)).reduce((a, p) => a + ctrSalePrice(roundMoney2(p.display_price), p), 0);
+    }
+    function sumCtrListPrices(plist) {
       return (plist || []).filter((p) => !isNotAPin(p)).reduce((a, p) => a + whatnotLadderPrice(roundMoney2(p.display_price), p), 0);
     }
     function globalRawTotal() {
@@ -1015,7 +1056,8 @@
           const gRaw = globalRawTotal();
           let glLine = `${payload.boards.length} boards: ${payload.global_pin_count} pins | ${moneyListRaw(gRaw)}`;
           if (window.ctpWhatnotPreview) {
-            glLine += ` · Whatnot Σ ${moneyListRaw(globalWhatnotTotal())}`;
+            const gList = (payload.boards || []).reduce((t, b) => t + sumCtrListPrices(b.pins), 0);
+            glLine += ` · CTR list Σ ${moneyListRaw(gList)} · 25% off Σ ${moneyListRaw(globalWhatnotTotal())}`;
           }
           gl.textContent = glLine;
           wrap.appendChild(gl);
@@ -1024,7 +1066,7 @@
         br.className = "boardHdrR";
         let brLine = `IMG ${b.board_num} | ${b.pin_count} pins | ${moneyListRaw(sumRawListPrices(b.pins))}`;
         if (window.ctpWhatnotPreview) {
-          brLine += ` · W ${moneyListRaw(sumWhatnotLadderPrices(b.pins))}`;
+          brLine += ` · CTR list ${moneyListRaw(sumCtrListPrices(b.pins))} · 25% off ${moneyListRaw(sumWhatnotLadderPrices(b.pins))}`;
         }
         br.textContent = brLine;
         wrap.appendChild(br);
@@ -1045,7 +1087,7 @@
           };
           const pr = document.createElement("div");
           pr.className = "price";
-          pr.textContent = overlayPinMoney(p);
+          fillOverlayPinBadge(pr, p);
           e.appendChild(pr);
           wrap.appendChild(e);
         });
