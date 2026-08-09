@@ -299,6 +299,22 @@ _EARLY_HAMBURGER_SCRIPT = '''\
 </script>
 '''
 
+# Until PINS finishes parsing, Search/Set Price/Next would otherwise silently no-op.
+_CTP_EARLY_READY_GUARD = '''\
+<script>
+window.__ctpAppReady = false;
+document.addEventListener('click', function(e){
+  if (window.__ctpAppReady) return;
+  var t = e.target && e.target.closest ? e.target.closest('#ebay-btn,#manual-btn,#next-btn,#back-btn,#nap-btn,#kwPrev,#kwNext,#undo-btn') : null;
+  if (!t) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  var st = document.getElementById('kwStatus');
+  if (st) st.textContent = 'Loading pin data… wait until a pin appears, then try again.';
+}, true);
+</script>
+'''
+
 def _head(title: str, extra_css: str = '') -> str:
     return (
         '<!DOCTYPE html>\n<html lang="en"><head>\n'
@@ -1380,8 +1396,8 @@ def _gen_new_ctp(pins, ctx, out_dir):
         'show_slot': p.get('show_slot', 0),
     } for p in sorted_pins]
 
-    data_js = (
-        "const PINS     = " + json.dumps(records, ensure_ascii=False) + ";\n"
+    pins_json = json.dumps(records, ensure_ascii=False)
+    meta_js = (
         "const FB_CFG   = " + json.dumps(ctx['fb'],  ensure_ascii=False) + ";\n"
         "const TEST_RUN_ID = " + json.dumps(ctx['tri']) + ";\n"
         "const APPROACH_ID = " + json.dumps(ctx['api']) + ";\n"
@@ -1504,6 +1520,7 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
         + '</div>\n'
         + _hamburger_html('new_ctp.html')
         + _EARLY_HAMBURGER_SCRIPT
+        + _CTP_EARLY_READY_GUARD
         + '<div id="prog-wrap"><div id="prog-fill"></div></div>\n'
         + '''
 <div id="tile-area">
@@ -1557,7 +1574,8 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
 </div>
 
 <script>
-''' + data_js + f"const GRAY = '{_GRAY_PLACEHOLDER}';\n" + '''
+window.__ctpStart = function(PINS) {
+''' + meta_js + f"const GRAY = '{_GRAY_PLACEHOLDER}';\n" + '''
 const STORE_KEY = 'ctp_v2_' + RUN_NAME;
 document.getElementById('ctp-count').textContent = PINS.length + ' pins';
 
@@ -1565,12 +1583,12 @@ let selPin = 0;
 let confirmed = {};   // pk -> origIdx  (or -1 for not-a-pin)
 let lastUndo  = null;
 let curFilter = 'nomatch';
-// Deep-link from overlay/contact sheet: ?pin= (optionally with ?filter=) → All
+// Deep-link from overlay/contact sheet: any ?pin= opens All so the pin is visible.
 (function peekCtpUrlFilter(){
   const params = new URLSearchParams(window.location.search);
   const pin = params.get('pin');
   const f = params.get('filter');
-  if (pin && !f) { curFilter = 'all'; return; }
+  if (pin) { curFilter = 'all'; return; }
   if (f === 'no_match' || f === 'nomatch') curFilter = 'nomatch';
   else if (f === 'unrev' || f === 'unreviewed') curFilter = 'unrev';
   else if (f === 'all') curFilter = 'all';
@@ -2060,9 +2078,10 @@ document.getElementById('kwOpenWeb').addEventListener('click', ev => {
 });
 document.getElementById('ebay-btn').addEventListener('click', async () => {
   const p = ctpRequirePin('Search'); if (!p) return;
-  const q = (document.getElementById('ebay-input').value||'').trim(); if (!q) return;
-  const searchPk = p.pk;
+  const q = (document.getElementById('ebay-input').value||'').trim();
   const st = document.getElementById('kwStatus');
+  if (!q) { if (st) st.textContent = 'Enter a search term first.'; return; }
+  const searchPk = p.pk;
   if (st) st.textContent = 'Searching…';
   try {
     const { items, lastError, apiError } = await _kwSearch(q, 50);
@@ -2097,7 +2116,11 @@ document.getElementById('kwNext').addEventListener('click', () => {
 document.getElementById('manual-btn').addEventListener('click', () => {
   const p = ctpRequirePin('Set Price'); if (!p) return;
   const v = parseFloat(document.getElementById('manual-price').value);
-  if (isNaN(v) || v <= 0) return;
+  if (isNaN(v) || v <= 0) {
+    const st = document.getElementById('kwStatus');
+    if (st) st.textContent = 'Enter a price greater than 0, then tap Set Price.';
+    return;
+  }
   const prevMs = p.ms;
   p._manualPrice = v;
   // Manual price: keep learning snapshot of S0; do not pretend a listing was chosen.
@@ -2161,7 +2184,8 @@ function applyFilter() {
   const saved = parseInt(sessionStorage.getItem(STORE_KEY) || '0', 10);
   selPin = displayPins.length ? Math.min(saved, displayPins.length - 1) : 0;
   lastUndo = null;
-  document.getElementById('ctp-count').textContent = displayPins.length + ' / ' + PINS.length + ' pins';
+  const _fl = ({nomatch:'No Match', visual_nomatch:'Steve Only', unrev:'Unreviewed', all:'All', wdi:'WDI', dec:'DEC', dssh:'DSSH', le:'LE'})[curFilter] || curFilter;
+  document.getElementById('ctp-count').textContent = _fl + ' · ' + displayPins.length + ' / ' + PINS.length;
   updateFilterCounts();
   if (!displayPins.length) {
     const msg = (curFilter === 'nomatch')
@@ -2233,12 +2257,9 @@ applyFilter();
   const _bb = document.getElementById('src-back-btn');
   if (_bb) { _bb.style.display = ''; _bb.onclick = () => history.back(); }
 })();
-</script>
-'''
-        + '<script>\n' + _HAMBURGER_JS + '</script>\n'
-        + _FB_SDK
-        + '''
-<script>
+
+// Firebase REST API — shared with hydrate (inside __ctpStart for PINS/confirmed scope)
+''' + _FB_SDK.replace('<script>', '').replace('</script>', '') + '''
 // Hydrate CTP from Firebase REST API: update prices, match statuses, and confirmed slots
 (async function hydrateCTP() {
   const fbPins = await _fbReadAllPins();
@@ -2303,8 +2324,17 @@ applyFilter();
     if (i >= 0) { selPin = i; sessionStorage.setItem(STORE_KEY, i); renderPin(i); }
   }
 })();
+
+window.__ctpAppReady = true;
+const _stReady = document.getElementById('kwStatus');
+if (_stReady && /Loading pin data/.test(_stReady.textContent || '')) _stReady.textContent = '';
+}; // end __ctpStart
+</script>
+<script>
+window.__ctpStart(''' + pins_json + ''');
 </script>
 '''
+        + '<script>\n' + _HAMBURGER_JS + '</script>\n'
         + '\n</body></html>'
     )
 
