@@ -663,9 +663,10 @@
       return "Board " + bo + " · Pin " + n;
     }
     function pinImgAndPinRefLine(p) {
+      const bo = pinBoardOrdinal(p);
       const bn = (p && p.board_num != null && String(p.board_num) !== "") ? String(p.board_num) : "?";
       const pn = p && p.pin_n != null ? String(p.pin_n) : "?";
-      return "IMG " + bn + " · pin " + pn;
+      return "Board " + bo + " · IMG " + bn + " · pin " + pn;
     }
 
     function tierOf(p) { return (p && p.likelihood_tier) ? p.likelihood_tier : "unknown"; }
@@ -1077,7 +1078,8 @@
         }
         const br = document.createElement("div");
         br.className = "boardHdrR";
-        let brLine = `IMG ${b.board_num} | ${b.pin_count} pins | ${moneyListRaw(sumRawListPrices(b.pins))}`;
+        const boardOrd = pinBoardIndexFromPayload({ board_num: b.board_num }) || "?";
+        let brLine = `Board ${boardOrd} · IMG ${b.board_num} | ${b.pin_count} pins | ${moneyListRaw(sumRawListPrices(b.pins))}`;
         if (window.ctpWhatnotPreview) {
           brLine += ` · CTR list ${moneyListRaw(sumCtrListPrices(b.pins))} · 25% off ${moneyListRaw(sumWhatnotLadderPrices(b.pins))}`;
         }
