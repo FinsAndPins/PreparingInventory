@@ -1,0 +1,164 @@
+{
+  "predictions": [
+    {
+      "x": 379.5673828125,
+      "y": 951.796875,
+      "width": 190.839111328125,
+      "height": 234.68701171875,
+      "confidence": 0.8860265612602234,
+      "class": "pin"
+    },
+    {
+      "x": 553.423828125,
+      "y": 944.12109375,
+      "width": 200.7216796875,
+      "height": 225.85986328125,
+      "confidence": 0.8838388919830322,
+      "class": "pin"
+    },
+    {
+      "x": 758.3672180175781,
+      "y": 953.33203125,
+      "width": 208.20562744140625,
+      "height": 229.8896484375,
+      "confidence": 0.858244001865387,
+      "class": "pin"
+    },
+    {
+      "x": 505.83396911621094,
+      "y": 1185.140625,
+      "width": 197.65139770507812,
+      "height": 285.73095703125,
+      "confidence": 0.8557306528091431,
+      "class": "pin"
+    },
+    {
+      "x": 240.63575744628906,
+      "y": 1231.962890625,
+      "width": 243.51419067382812,
+      "height": 340.8046875,
+      "confidence": 0.8475897312164307,
+      "class": "pin"
+    },
+    {
+      "x": 747.62109375,
+      "y": 1203.5625,
+      "width": 240.06005859375,
+      "height": 308.75830078125,
+      "confidence": 0.671901285648346,
+      "class": "pin"
+    },
+    {
+      "x": 937.9804382324219,
+      "y": 958.705078125,
+      "width": 197.84332275390625,
+      "height": 236.60595703125,
+      "confidence": 0.6614856719970703,
+      "class": "pin"
+    },
+    {
+      "x": 783.697265625,
+      "y": 738.0263671875,
+      "width": 166.37255859375,
+      "height": 219.52734375,
+      "confidence": 0.6529056429862976,
+      "class": "pin"
+    },
+    {
+      "x": 940.283203125,
+      "y": 739.9453125,
+      "width": 186.233642578125,
+      "height": 227.5869140625,
+      "confidence": 0.6511330008506775,
+      "class": "pin"
+    },
+    {
+      "x": 196.5,
+      "y": 955.634765625,
+      "width": 197.267578125,
+      "height": 217.224609375,
+      "confidence": 0.6120198369026184,
+      "class": "pin"
+    },
+    {
+      "x": 642.4628601074219,
+      "y": 733.4208984375,
+      "width": 154.76287841796875,
+      "height": 213.7705078125,
+      "confidence": 0.6068480014801025,
+      "class": "pin"
+    },
+    {
+      "x": 364.2158203125,
+      "y": 735.7236328125,
+      "width": 172.3212890625,
+      "height": 222.2138671875,
+      "confidence": 0.6023540496826172,
+      "class": "pin"
+    },
+    {
+      "x": 609.45703125,
+      "y": 909.580078125,
+      "width": 1124.501953125,
+      "height": 1014.73828125,
+      "confidence": 0.5564900040626526,
+      "class": "pin"
+    },
+    {
+      "x": 1008.59765625,
+      "y": 1211.23828125,
+      "width": 299.16357421875,
+      "height": 309.333984375,
+      "confidence": 0.5367985367774963,
+      "class": "pin"
+    },
+    {
+      "x": 513.1259460449219,
+      "y": 725.361328125,
+      "width": 166.27655029296875,
+      "height": 214.72998046875,
+      "confidence": 0.5176928043365479,
+      "class": "pin"
+    },
+    {
+      "x": 220.294921875,
+      "y": 732.6533203125,
+      "width": 158.12109375,
+      "height": 235.45458984375,
+      "confidence": 0.4360816478729248,
+      "class": "pin"
+    }
+  ],
+  "image": {
+    "width": 1180,
+    "height": 1572
+  },
+  "_pin_tools_meta": {
+    "pin_dedupe": {
+      "rule_id": "pin_dedupe_nms_v2",
+      "pass1": {
+        "rule_id": "pin_dedupe_nms_v1",
+        "method": "greedy_iou_nms_keep_highest_confidence",
+        "iou_threshold": 0.85,
+        "raw_prediction_count": 18,
+        "deduped_prediction_count": 18,
+        "removed_count": 0
+      },
+      "pass2": {
+        "rule_id": "pin_dedupe_nms_v1",
+        "method": "greedy_iou_nms_keep_highest_confidence",
+        "iou_threshold": 0.42,
+        "raw_prediction_count": 18,
+        "deduped_prediction_count": 16,
+        "removed_count": 2
+      },
+      "iou_primary": 0.85,
+      "iou_secondary": 0.42,
+      "raw_prediction_count": 18,
+      "deduped_prediction_count": 16,
+      "removed_count_pass1": 0,
+      "removed_count_pass2": 2,
+      "removed_count_total": 2
+    }
+  }
+}

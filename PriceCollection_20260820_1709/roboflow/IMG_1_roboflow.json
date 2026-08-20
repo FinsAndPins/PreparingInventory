@@ -1,0 +1,164 @@
+{
+  "predictions": [
+    {
+      "x": 388.0107421875,
+      "y": 752.2265625,
+      "width": 213.19482421875,
+      "height": 269.99560546875,
+      "confidence": 0.920074462890625,
+      "class": "pin"
+    },
+    {
+      "x": 629.4140625,
+      "y": 1217.37890625,
+      "width": 222.40576171875,
+      "height": 222.40576171875,
+      "confidence": 0.9192084670066833,
+      "class": "pin"
+    },
+    {
+      "x": 804.421875,
+      "y": 1032.392578125,
+      "width": 227.01123046875,
+      "height": 200.337890625,
+      "confidence": 0.9141375422477722,
+      "class": "pin"
+    },
+    {
+      "x": 185.75390625,
+      "y": 754.1455078125,
+      "width": 236.60595703125,
+      "height": 282.27685546875,
+      "confidence": 0.8951566815376282,
+      "class": "pin"
+    },
+    {
+      "x": 616.365234375,
+      "y": 1026.251953125,
+      "width": 194.197265625,
+      "height": 175.775390625,
+      "confidence": 0.8881781101226807,
+      "class": "pin"
+    },
+    {
+      "x": 577.21875,
+      "y": 773.71875,
+      "width": 204.5595703125,
+      "height": 317.77734375,
+      "confidence": 0.8752548694610596,
+      "class": "pin"
+    },
+    {
+      "x": 991.7109375,
+      "y": 1148.296875,
+      "width": 177.022705078125,
+      "height": 177.598388671875,
+      "confidence": 0.83601975440979,
+      "class": "pin"
+    },
+    {
+      "x": 831.2870788574219,
+      "y": 1213.541015625,
+      "width": 218.56793212890625,
+      "height": 201.29736328125,
+      "confidence": 0.818156361579895,
+      "class": "pin"
+    },
+    {
+      "x": 268.6523439884186,
+      "y": 1099.939453125,
+      "width": 523.4882807731628,
+      "height": 444.8115234375,
+      "confidence": 0.7762839198112488,
+      "class": "pin"
+    },
+    {
+      "x": 846.638671875,
+      "y": 767.9619140625,
+      "width": 400.67578125,
+      "height": 340.99658203125,
+      "confidence": 0.7174080014228821,
+      "class": "pin"
+    },
+    {
+      "x": 952.564453125,
+      "y": 990.943359375,
+      "width": 149.2939453125,
+      "height": 119.070556640625,
+      "confidence": 0.6306849718093872,
+      "class": "pin"
+    },
+    {
+      "x": 386.859375,
+      "y": 1094.56640625,
+      "width": 183.0673828125,
+      "height": 284.3876953125,
+      "confidence": 0.6248660087585449,
+      "class": "pin"
+    },
+    {
+      "x": 931.0722351074219,
+      "y": 730.3505859375,
+      "width": 217.80035400390625,
+      "height": 246.0087890625,
+      "confidence": 0.5457396507263184,
+      "class": "pin"
+    },
+    {
+      "x": 183.451171875,
+      "y": 1079.21484375,
+      "width": 152.843994140625,
+      "height": 287.07421875,
+      "confidence": 0.4568641185760498,
+      "class": "pin"
+    },
+    {
+      "x": 544.212890625,
+      "y": 325.64501953125,
+      "width": 874.271484375,
+      "height": 606.0029296875,
+      "confidence": 0.45177996158599854,
+      "class": "pin"
+    },
+    {
+      "x": 1126.0813598632812,
+      "y": 1046.208984375,
+      "width": 107.8372802734375,
+      "height": 206.478515625,
+      "confidence": 0.4143655300140381,
+      "class": "pin"
+    }
+  ],
+  "image": {
+    "width": 1180,
+    "height": 1572
+  },
+  "_pin_tools_meta": {
+    "pin_dedupe": {
+      "rule_id": "pin_dedupe_nms_v2",
+      "pass1": {
+        "rule_id": "pin_dedupe_nms_v1",
+        "method": "greedy_iou_nms_keep_highest_confidence",
+        "iou_threshold": 0.85,
+        "raw_prediction_count": 17,
+        "deduped_prediction_count": 17,
+        "removed_count": 0
+      },
+      "pass2": {
+        "rule_id": "pin_dedupe_nms_v1",
+        "method": "greedy_iou_nms_keep_highest_confidence",
+        "iou_threshold": 0.42,
+        "raw_prediction_count": 17,
+        "deduped_prediction_count": 16,
+        "removed_count": 1
+      },
+      "iou_primary": 0.85,
+      "iou_secondary": 0.42,
+      "raw_prediction_count": 17,
+      "deduped_prediction_count": 16,
+      "removed_count_pass1": 0,
+      "removed_count_pass2": 1,
+      "removed_count_total": 1
+    }
+  }
+}
