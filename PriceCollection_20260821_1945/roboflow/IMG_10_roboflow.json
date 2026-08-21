@@ -1,0 +1,84 @@
+{
+  "predictions": [
+    {
+      "x": 410.13671875,
+      "y": 1014.0625,
+      "width": 820.2734375,
+      "height": 1173.90625,
+      "confidence": 0.937210738658905,
+      "class": "pin"
+    },
+    {
+      "x": 969.8046875,
+      "y": 847.34375,
+      "width": 700.390625,
+      "height": 1195.390625,
+      "confidence": 0.8283842206001282,
+      "class": "pin"
+    },
+    {
+      "x": 1042.421875,
+      "y": 1114.609375,
+      "width": 290.8984375,
+      "height": 424.31640625,
+      "confidence": 0.3223126530647278,
+      "class": "pin"
+    },
+    {
+      "x": 564.609375,
+      "y": 1273.59375,
+      "width": 516.9140625,
+      "height": 403.69140625,
+      "confidence": 0.3112174868583679,
+      "class": "pin"
+    },
+    {
+      "x": 67.890625,
+      "y": 766.5625,
+      "width": 135.78125,
+      "height": 556.015625,
+      "confidence": 0.27835485339164734,
+      "class": "pin"
+    },
+    {
+      "x": 333.8671875,
+      "y": 1040.703125,
+      "width": 158.017578125,
+      "height": 398.53515625,
+      "confidence": 0.26779094338417053,
+      "class": "pin"
+    }
+  ],
+  "image": {
+    "width": 1320,
+    "height": 1760
+  },
+  "_pin_tools_meta": {
+    "pin_dedupe": {
+      "rule_id": "pin_dedupe_nms_v2",
+      "pass1": {
+        "rule_id": "pin_dedupe_nms_v1",
+        "method": "greedy_iou_nms_keep_highest_confidence",
+        "iou_threshold": 0.85,
+        "raw_prediction_count": 6,
+        "deduped_prediction_count": 6,
+        "removed_count": 0
+      },
+      "pass2": {
+        "rule_id": "pin_dedupe_nms_v1",
+        "method": "greedy_iou_nms_keep_highest_confidence",
+        "iou_threshold": 0.42,
+        "raw_prediction_count": 6,
+        "deduped_prediction_count": 6,
+        "removed_count": 0
+      },
+      "iou_primary": 0.85,
+      "iou_secondary": 0.42,
+      "raw_prediction_count": 6,
+      "deduped_prediction_count": 6,
+      "removed_count_pass1": 0,
+      "removed_count_pass2": 0,
+      "removed_count_total": 0
+    }
+  }
+}
