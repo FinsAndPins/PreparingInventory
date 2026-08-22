@@ -1071,6 +1071,7 @@
       const at = Date.now();
       const dateStr = new Date(at).toLocaleDateString("en-US", { timeZone: "America/New_York" });
       const patch = {
+        pin_key: pin.pin_key,
         sale_price: price,
         sale_recorded_by: who,
         sale_recorded_date: dateStr,
