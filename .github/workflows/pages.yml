@@ -43,6 +43,20 @@ jobs:
           done < <(git ls-tree --name-only HEAD | grep '^PriceCollection_' || true)
           echo "Sparse-added ${added} testing UI path(s)."
 
+      - name: Sparse-add Whatnot stream slideshow folders
+        run: |
+          set -euo pipefail
+          added=0
+          while IFS= read -r d; do
+            git sparse-checkout add "$d"
+            added=$((added+1))
+          done < <(git ls-tree -d --name-only HEAD | grep '^PriceCollection_' | while read -r c; do
+            if git cat-file -e "HEAD:${c}/whatnot_stream_slideshow/index.html" 2>/dev/null; then
+              echo "${c}/whatnot_stream_slideshow"
+            fi
+          done)
+          echo "Sparse-added ${added} whatnot_stream_slideshow path(s)."
+
       - name: Sparse-add title validator review pages
         run: |
           set -euo pipefail
@@ -102,6 +116,13 @@ jobs:
               collection="${vlm_ctm_v2%/testing_ui_vlm_ctm_exp_v2}"
               mkdir -p "_site/$collection"
               cp -R "$vlm_ctm_v2" "_site/$collection/"
+            fi
+          done
+          for slideshow in PriceCollection_*/whatnot_stream_slideshow; do
+            if [ -d "$slideshow" ]; then
+              collection="${slideshow%/whatnot_stream_slideshow}"
+              mkdir -p "_site/$collection"
+              cp -R "$slideshow" "_site/$collection/"
             fi
           done
           echo "Site size:" && du -sh _site
