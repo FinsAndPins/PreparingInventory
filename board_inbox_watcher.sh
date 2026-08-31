@@ -17,13 +17,23 @@
 #   PRICE_INBOX_QUIET_SEC   default 120 — folder must be unchanged this long
 #   PRICE_INBOX_POLL_SEC    default 10  — how often to rescan
 #   PRICE_INBOX_FAIL_COOLDOWN_SEC  default 3600 — after a failed pricing run, wait this long before
-#                                  automatic retry (stops iMessage spam). Adding/removing/changing a
-#                                  board file clears the cooldown immediately (stable snapshot changes).
+#                                  automatic retry (stops iMessage spam). A *new* set of board
+#                                  basenames (true new upload) clears the cooldown; size-only
+#                                  changes / rollback of the same boards do not.
+#   PRICE_INBOX_FAIL_NOTIFY_MIN_SEC default 3600 — min seconds between Steve failure iMessages
+#                                  (retries still happen; texts are rate-limited).
+#   PRICE_INBOX_NOT_READY_RETRY_SEC default 120 — after exit 75 (0-byte / iCloud stub boards),
+#                                  quiet retry delay; no iMessage.
+#   PRICING_FAIL_NOTIFY_HANDLES — Steve-only failure texts (space-separated). Empty = no failure texts.
+#                                  Start/success still use PRICING_NOTIFY_HANDLES (Lexi + Steve).
 #   PIN_PRICING_USE_RFDETR   default 1 — RF-DETR (Core ML). Set 0 to use Roboflow API for this watcher.
 #   PIN_PRICING_STUDY_MVP    defaults to PinPricingStudyMVP_RFDETR_TEST when RF-DETR; else PinPricingStudyMVP.
 #   PIN_PRICING_RFDETR_MIN_CONF — optional; default 0.25 (matches Click To Collect app).
 #   LOCAL_WATCHER_BIN     if set, directory with copies of this script, price_boards_from_inbox.sh,
 #                           and lexi_send_imessage.py (launchd cannot run scripts from iCloud paths).
+#   BOARDS_TO_PRICE_DROP_ZONE  Lexi's iCloud BoardsToPrice drop zone (canonical).
+#                              Default in launchd launcher: iCloud PreparingInventory/BoardsToPrice.
+#                              Required when PREP is the App Support publish clone.
 #   BOARD_INBOX_DIR       local mirror of iCloud BoardsToPrice (LaunchAgent). Hybrid model:
 #                           Lexi drops in iCloud BoardsToPrice → watcher materializes into this local
 #                           folder → price_boards runs RF-DETR/eBay on local PricingWork (not iCloud).
@@ -53,6 +63,9 @@ LAST_PRICE_LOG="${PRICE_LOG_DIR:-${PREP}/_logs}/price_inbox_last.log"
 QUIET_SEC="${PRICE_INBOX_QUIET_SEC:-120}"
 POLL_SEC="${PRICE_INBOX_POLL_SEC:-10}"
 FAIL_COOLDOWN_SEC="${PRICE_INBOX_FAIL_COOLDOWN_SEC:-3600}"
+FAIL_NOTIFY_MIN_SEC="${PRICE_INBOX_FAIL_NOTIFY_MIN_SEC:-3600}"
+NOT_READY_RETRY_SEC="${PRICE_INBOX_NOT_READY_RETRY_SEC:-120}"
+RFDETR_MODEL_MIN_WEIGHT_BYTES="${RFDETR_MODEL_MIN_WEIGHT_BYTES:-1000000}"
 
 mkdir -p "${BIN}/_logs" "${PREP}/_logs"
 exec >>"$LOG" 2>&1
@@ -77,22 +90,102 @@ if [[ ! -x "$PRICE_SCRIPT" ]]; then
   exit 1
 fi
 
-send_msg() {
-  local body="$1"
+send_msg_to() {
+  local handles="$1"
+  local body="$2"
+  local label="${3:-LEXI_NOTIFY}"
+  local attach="${4:-}"
+  if [[ -z "$handles" ]]; then
+    echo "[$(date -Iseconds)] ${label}: skip (no handles)"
+    return 0
+  fi
   if [[ ! -f "$SEND_PY" ]]; then
-    echo "[$(date -Iseconds)] LEXI_NOTIFY: skip (no $SEND_PY)"
+    echo "[$(date -Iseconds)] ${label}: skip (no $SEND_PY)"
     return 0
   fi
   if ! command -v python3 >/dev/null 2>&1; then
-    echo "[$(date -Iseconds)] LEXI_NOTIFY: skip (no python3)"
+    echo "[$(date -Iseconds)] ${label}: skip (no python3)"
     return 0
   fi
-  if printf '%s' "$body" | python3 "$SEND_PY"; then
-    echo "[$(date -Iseconds)] LEXI_NOTIFY: sent (${#body} chars)"
+  # Override recipients for this send only (start/success → Lexi+Steve; failures → Steve).
+  # Optional IMESSAGE_ATTACH = image path (success pricing texts); sender falls back to text-only.
+  if printf '%s' "$body" | PRICING_NOTIFY_HANDLES="$handles" LEXI_IMESSAGE_HANDLE="" \
+      IMESSAGE_ATTACH="${attach}" python3 "$SEND_PY"; then
+    if [[ -n "$attach" ]]; then
+      echo "[$(date -Iseconds)] ${label}: sent (${#body} chars + thumb)"
+    else
+      echo "[$(date -Iseconds)] ${label}: sent (${#body} chars)"
+    fi
   else
-    echo "[$(date -Iseconds)] LEXI_NOTIFY: send failed (see stderr above)"
+    echo "[$(date -Iseconds)] ${label}: send failed (see stderr above)"
   fi
 }
+
+# First-board preview JPEG written by price_boards_from_inbox.sh (lexi_preview.jpg).
+pricing_success_preview_thumb() {
+  local thumb="" col work
+  if [[ -f "$LAST_PRICE_LOG" ]]; then
+    thumb=$(grep 'Preview thumb:' "$LAST_PRICE_LOG" | tail -1 | sed 's/.*Preview thumb: //' || true)
+  fi
+  if [[ -n "$thumb" && -f "$thumb" ]]; then
+    printf '%s' "$thumb"
+    return 0
+  fi
+  # Fallback: derive collection from harness URL → PricingWork/.../lexi_preview.jpg
+  local url=""
+  if [[ -f "$LAST_PRICE_LOG" ]]; then
+    url=$(grep 'Harness:' "$LAST_PRICE_LOG" | tail -1 | sed 's/.*Harness: //' || true)
+  fi
+  col=$(printf '%s' "$url" | sed -n 's|.*/\(PriceCollection_[0-9]\{8\}_[0-9]\{4\}\)/.*|\1|p')
+  work="${PRICE_PIPELINE_WORK:-${HOME}/Library/Application Support/FinsAndPins/PricingWork}"
+  if [[ -n "$col" && -f "${work}/${col}/lexi_preview.jpg" ]]; then
+    printf '%s' "${work}/${col}/lexi_preview.jpg"
+    return 0
+  fi
+  return 1
+}
+
+# Start / success — everyone in PRICING_NOTIFY_HANDLES (or LEXI_IMESSAGE_HANDLE fallback).
+# Optional 2nd arg: image path to attach (pricing success preview thumb).
+send_msg() {
+  local body="$1"
+  local attach="${2:-}"
+  local handles="${PRICING_NOTIFY_HANDLES:-${LEXI_IMESSAGE_HANDLE:-}}"
+  send_msg_to "$handles" "$body" "LEXI_NOTIFY" "$attach"
+}
+
+# Failures — Steve only. Empty PRICING_FAIL_NOTIFY_HANDLES = silence (no Lexi spam).
+send_fail_msg() {
+  local body="$1"
+  local handles="${PRICING_FAIL_NOTIFY_HANDLES:-}"
+  if [[ -z "$handles" ]]; then
+    echo "[$(date -Iseconds)] FAIL_NOTIFY: suppressed (PRICING_FAIL_NOTIFY_HANDLES unset — Lexi not texted)"
+    return 0
+  fi
+  send_msg_to "$handles" "$body" "FAIL_NOTIFY"
+}
+
+_local_rfdetr_model_ok() {
+  local pkg="${RFDETR_COREML_MODEL_PATH:-${HOME}/Library/Application Support/FinsAndPins/models/RfDetrPinDetector.mlpackage}"
+  local weight="${pkg}/Data/com.apple.CoreML/weights/weight.bin"
+  local sz
+  [[ -d "$pkg" ]] || return 1
+  [[ -f "$weight" ]] || return 1
+  sz=$(stat -f %z "$weight" 2>/dev/null || echo 0)
+  [[ "$sz" -gt "${RFDETR_MODEL_MIN_WEIGHT_BYTES}" ]]
+}
+
+# Fail-fast at watcher start when RF-DETR is enabled: missing local model must not start runs.
+model_preflight_notified=0
+if [[ "${PIN_PRICING_USE_RFDETR:-1}" != "0" ]] && [[ "${PIN_PRICING_USE_RFDETR:-1}" != "false" ]] && [[ "${PIN_PRICING_USE_RFDETR:-1}" != "False" ]]; then
+  if _local_rfdetr_model_ok; then
+    echo "[$(date -Iseconds)] RF-DETR local model OK: ${RFDETR_COREML_MODEL_PATH:-${HOME}/Library/Application Support/FinsAndPins/models/RfDetrPinDetector.mlpackage}"
+  else
+    echo "[$(date -Iseconds)] ERROR: local RF-DETR model missing/tiny — refusing pricing runs until install syncs Application Support/FinsAndPins/models/"
+    send_fail_msg "Fins & Pins pricing: watcher will not start runs — local RF-DETR Core ML model is missing. Re-run launchd/install_boards_inbox_launchagent.sh on Steve's Mac."
+    model_preflight_notified=1
+  fi
+fi
 
 # Use find (not shell globs): launchd + iCloud paths often fail glob expansion while find works.
 _board_find_board_files() {
@@ -161,7 +254,9 @@ PY
 bridge_pull_icloud_inbox_to_scan_dir() {
   [[ -n "${BOARD_INBOX_DIR:-}" ]] || return 0
   mkdir -p "${BOARD_INBOX_DIR}"
-  local src="${PREP}/BoardsToPrice"
+  # Lexi drops in the iCloud BoardsToPrice folder. PREP may be the App Support
+  # publish clone (empty BoardsToPrice) — do not pull from there.
+  local src="${BOARDS_TO_PRICE_DROP_ZONE:-${PREP}/BoardsToPrice}"
   if [[ ! -d "$src" ]]; then
     return 0
   fi
@@ -241,7 +336,9 @@ run_price_pipeline() {
   fi
   export PIN_PRICING_STUDY_MVP="$(_resolve_pin_pricing_study_mvp)"
   echo "[$(date -Iseconds)] PIN_PRICING_STUDY_MVP=${PIN_PRICING_STUDY_MVP}"
-  PREP="$PREP" BOARD_INBOX_DIR="${BOARD_INBOX_DIR:-}" /usr/bin/caffeinate -dimsu -- /bin/bash "$PRICE_SCRIPT"
+  # LOCAL_WATCHER_BIN lets price_boards prefer launchd-safe copies of review-page scripts.
+  PREP="$PREP" BOARD_INBOX_DIR="${BOARD_INBOX_DIR:-}" LOCAL_WATCHER_BIN="${LOCAL_WATCHER_BIN:-$BIN}" \
+    /usr/bin/caffeinate -dimsu -- /bin/bash "$PRICE_SCRIPT"
 }
 
 inbox_has_boards() {
@@ -256,6 +353,21 @@ inbox_snapshot() {
     [[ -f "$f" ]] || continue
     sz=$(stat -f %z "$f" 2>/dev/null) || continue
     lines+=$(printf '%s\t%s\n' "$(basename "$f")" "$sz")
+  done < <(_board_find_board_files -print0 | sort -z)
+  if [[ -z "$lines" ]]; then
+    printf '%s' "empty"
+    return
+  fi
+  printf '%s' "$lines" | LC_ALL=C sort | md5 -q 2>/dev/null || printf '%s' "empty"
+}
+
+# Basename-only fingerprint — used so rollback/size flicker of the *same* boards does not
+# clear the post-failure cooldown (that was spamming Lexi with start+fail every ~2 min).
+inbox_basenames_fp() {
+  local lines="" f
+  while IFS= read -r -d '' f; do
+    [[ -f "$f" ]] || continue
+    lines+=$(printf '%s\n' "$(basename "$f")")
   done < <(_board_find_board_files -print0 | sort -z)
   if [[ -z "$lines" ]]; then
     printf '%s' "empty"
@@ -282,6 +394,8 @@ release_lock() {
 last_snap=""
 last_change_epoch=""
 fail_quiet_until=0
+fail_basenames_fp=""
+last_fail_notify_epoch=0
 debug_tick=0
 
 while true; do
@@ -306,20 +420,50 @@ while true; do
   fi
 
   if [[ "$snap" != "$last_snap" ]]; then
+    names_fp=$(inbox_basenames_fp)
     last_snap=$snap
     last_change_epoch=$now
-    fail_quiet_until=0
-    echo "[$(date -Iseconds)] inbox snapshot changed (board set)"
+    # Only clear failure cooldown on a *new basename set* (true new upload / empty→boards).
+    # Size-only changes and rollback of the same boards must keep the cooldown.
+    if [[ -n "$fail_basenames_fp" && "$names_fp" == "$fail_basenames_fp" && "$now" -lt "$fail_quiet_until" ]]; then
+      echo "[$(date -Iseconds)] inbox snapshot changed (same board names; keeping failure cooldown until $(date -r "$fail_quiet_until" "+%H:%M:%S"))"
+    else
+      fail_quiet_until=0
+      fail_basenames_fp=""
+      echo "[$(date -Iseconds)] inbox snapshot changed (board set)"
+    fi
   fi
 
   if inbox_has_boards && [[ -n "${last_change_epoch:-}" ]] && [[ "$now" -ge "$fail_quiet_until" ]]; then
     idle=$((now - last_change_epoch))
     if [[ "$idle" -ge "$QUIET_SEC" ]]; then
+      # Refuse to start if local RF-DETR model is missing (errno-11 Desktop path under launchd).
+      if [[ "${PIN_PRICING_USE_RFDETR:-1}" != "0" ]] && [[ "${PIN_PRICING_USE_RFDETR:-1}" != "false" ]] && [[ "${PIN_PRICING_USE_RFDETR:-1}" != "False" ]] \
+        && ! _local_rfdetr_model_ok; then
+        echo "[$(date -Iseconds)] ERROR: skipping run — local RF-DETR model missing/tiny"
+        fail_quiet_until=$((now + FAIL_COOLDOWN_SEC))
+        fail_basenames_fp=$(inbox_basenames_fp)
+        last_change_epoch=""
+        if [[ "$model_preflight_notified" -eq 0 ]]; then
+          send_fail_msg "Fins & Pins pricing: skipped run — local RF-DETR Core ML model is missing. Re-run launchd/install_boards_inbox_launchagent.sh on Steve's Mac."
+          model_preflight_notified=1
+          last_fail_notify_epoch=$now
+        fi
+        sleep "$POLL_SEC"
+        continue
+      fi
+
       echo "[$(date -Iseconds)] quiet for ${idle}s with boards present — acquiring lock"
       acquire_lock
       echo "[$(date -Iseconds)] lock acquired; starting price_boards_from_inbox.sh (caffeinate)"
       # Do not block the pipeline on Messages (timeouts would delay pricing and log writes).
-      ( send_msg "Fins & Pins pricing: started on Steve's Mac (boards detected in BoardsToPrice). You'll get another message when the run finishes and has been pushed to GitHub." ) &
+      # Suppress "started" texts while retrying the same failed board set (avoids Lexi spam).
+      names_fp=$(inbox_basenames_fp)
+      if [[ -n "$fail_basenames_fp" && "$names_fp" == "$fail_basenames_fp" ]]; then
+        echo "[$(date -Iseconds)] LEXI_NOTIFY: suppressed started (retry of same failed board set)"
+      else
+        ( send_msg "Fins & Pins pricing: started on Steve's Mac (boards detected in BoardsToPrice). You'll get another message when the run finishes and has been pushed to GitHub." ) &
+      fi
 
       set +e
       # Best-effort: keep the Mac awake while the long pricing pipeline runs (lid may be closed).
@@ -332,21 +476,55 @@ while true; do
 
       if [[ "$rc" -eq 0 ]]; then
         fail_quiet_until=0
+        fail_basenames_fp=""
+        last_fail_notify_epoch=0
+        model_preflight_notified=0
         url=""
+        thumb=""
         if [[ -f "$LAST_PRICE_LOG" ]]; then
           url=$(grep 'Harness:' "$LAST_PRICE_LOG" | tail -1 | sed 's/.*Harness: //' || true)
+        fi
+        thumb=$(pricing_success_preview_thumb || true)
+        if [[ -n "$thumb" ]]; then
+          echo "[$(date -Iseconds)] LEXI_NOTIFY: attaching preview thumb ${thumb}"
+        else
+          echo "[$(date -Iseconds)] LEXI_NOTIFY: no preview thumb (text + URL only)"
         fi
         send_msg "$(printf '%s\n\n%s\n\n%s' \
           "Fins & Pins pricing: finished and pushed to GitHub." \
           "${url:-Harness URL not found in log - open the PreparingInventory Lexi index on GitHub Pages.}" \
-          "The link usually works within 10-15 minutes.")"
-      else
+          "The link usually works within 10-15 minutes.")" "$thumb"
+      elif [[ "$rc" -eq 75 ]]; then
+        # Boards not ready (0-byte / iCloud stub) — quiet short retry, no iMessage.
+        now=$(date +%s)
+        fail_basenames_fp=$(inbox_basenames_fp)
+        fail_quiet_until=$((now + NOT_READY_RETRY_SEC))
+        echo "[$(date -Iseconds)] QUIET_RETRY: boards not ready (exit 75); retry after $(date -r "$fail_quiet_until" "+%Y-%m-%d %H:%M:%S %z") (${NOT_READY_RETRY_SEC}s, no iMessage)"
+      elif [[ "$rc" -eq 76 ]]; then
+        now=$(date +%s)
+        fail_basenames_fp=$(inbox_basenames_fp)
         fail_quiet_until=$((now + FAIL_COOLDOWN_SEC))
-        echo "[$(date -Iseconds)] pricing failed (exit ${rc}); automatic retry after $(date -r "$fail_quiet_until" "+%Y-%m-%d %H:%M:%S %z") (${FAIL_COOLDOWN_SEC}s cooldown, or sooner if the board file set in the inbox changes)"
-        send_msg "$(printf '%s\n\n%s\n\n%s' \
-          "Fins & Pins pricing: FAILED (automation exit ${rc})." \
-          "You don't need to debug anything. The Mac will retry automatically after a cooldown, or you can add/remove a board photo in BoardsToPrice to start sooner." \
-          "Steve can check _logs/price_inbox_last.log on the Mac when he's up.")"
+        echo "[$(date -Iseconds)] pricing blocked — local RF-DETR model missing (exit 76); retry after $(date -r "$fail_quiet_until" "+%Y-%m-%d %H:%M:%S %z")"
+        if (( last_fail_notify_epoch == 0 || now - last_fail_notify_epoch >= FAIL_NOTIFY_MIN_SEC )); then
+          last_fail_notify_epoch=$now
+          send_fail_msg "Fins & Pins pricing: blocked — local RF-DETR Core ML model missing/unusable (exit 76). Re-run launchd/install_boards_inbox_launchagent.sh. Lexi was not texted."
+        else
+          echo "[$(date -Iseconds)] FAIL_NOTIFY: suppressed (rate limit ${FAIL_NOTIFY_MIN_SEC}s)"
+        fi
+      else
+        now=$(date +%s)
+        fail_basenames_fp=$(inbox_basenames_fp)
+        fail_quiet_until=$((now + FAIL_COOLDOWN_SEC))
+        echo "[$(date -Iseconds)] pricing failed (exit ${rc}); automatic retry after $(date -r "$fail_quiet_until" "+%Y-%m-%d %H:%M:%S %z") (${FAIL_COOLDOWN_SEC}s cooldown, or sooner if a *new* board file set appears)"
+        if (( last_fail_notify_epoch == 0 || now - last_fail_notify_epoch >= FAIL_NOTIFY_MIN_SEC )); then
+          last_fail_notify_epoch=$now
+          send_fail_msg "$(printf '%s\n\n%s\n\n%s' \
+            "Fins & Pins pricing: FAILED (automation exit ${rc}). Lexi was not texted." \
+            "The Mac will retry automatically after a cooldown, or add/remove a board photo in BoardsToPrice to start sooner." \
+            "Check PreparingInventoryWatcherBin/_logs/price_inbox_last.log")"
+        else
+          echo "[$(date -Iseconds)] FAIL_NOTIFY: suppressed (rate limit ${FAIL_NOTIFY_MIN_SEC}s; last notify $(date -r "$last_fail_notify_epoch" "+%H:%M:%S"))"
+        fi
       fi
 
       # Reset debounce so we only react to the next upload wave.

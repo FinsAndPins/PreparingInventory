@@ -12,6 +12,8 @@
 #   POOL_N, GATE_T        — passed to run_visual_baseline_pipeline.py
 #   SKIP_GIT=1            — skip commit and push
 #   PIN_PRICING_KEYS_DIR  — local dir with ebay_keys.json (default: Application Support/FinsAndPins/keys)
+#   RFDETR_COREML_MODEL_PATH — local .mlpackage (default: Application Support/FinsAndPins/models/…).
+#                            Desktop/iCloud model paths hit errno 11 under launchd; prefer local copy.
 #   PRICE_PUBLISH_REPO    — local-disk git clone used for commit/push (default: Application Support/
 #                           FinsAndPins/PreparingInventoryGit). iCloud .git is unreliable under launchd
 #                           (evicted .git/info/exclude broke publishing 2026-07-18); the run is copied
@@ -22,12 +24,17 @@
 #     EBAY_NO_AUTO_LARGE_RUN=1  — disable auto pacing for large crop counts
 #   EBAY_CHECKPOINT_EVERY  — write candidates.checkpoint.json every N crops (default 50; 0=off)
 #   BOARD_INBOX_DIR      — optional absolute path to local mirror inbox (launchd); default is ${PREP}/BoardsToPrice
-#                        — after a successful pipeline, canonical ${PREP}/BoardsToPrice/ is cleared of board images
-#                          so iCloud drop zone is empty for the next Lexi upload.
+#   BOARDS_TO_PRICE_DROP_ZONE — Lexi's iCloud BoardsToPrice drop zone. After a successful pipeline this folder
+#                          is cleared of board images so the next Lexi upload is obvious. When unset, falls
+#                          back to ${PREP}/BoardsToPrice (Terminal / non-hybrid).
 #   PRICE_PIPELINE_WORK  — local-disk work root for rename/stage/RF-DETR/eBay (default: Application Support/
 #                          FinsAndPins/PricingWork). Avoids iCloud errno 11 while reading staged boards.
 #   PRICE_LOG_DIR        — writable log dir (launchd sets this under Application Support).
 #   PIN_PRICING_STUDY_MVP — PinPricingStudyMVP path; launchd should use Application Support copy (not iCloud .venv).
+#   CTR_SHOW_ID          — optional YYYYMMDD ClickToClaim show; after a successful publish, wire that
+#                          show's price overlay (_PO_TR / PRICING_RUN_ID) to this run's Firebase test_run_id
+#                          and path-limited git push the show HTML.
+#   SKIP_CTR_WIRE=1      — do not wire/push CTR overlay even when CTR_SHOW_ID is set.
 #
 set -euo pipefail
 set +H
@@ -121,6 +128,60 @@ PY
   else
     log "ERROR: ${dest}/ebay_keys.json missing/empty after restore — refusing iCloud fallback under launchd"
   fi
+}
+
+# Exit codes used by board_inbox_watcher (do not conflate with generic exit 1):
+#   75  EX_TEMPFAIL — boards not ready (iCloud stub / 0-byte); quiet retry, no Lexi text
+#   76  local RF-DETR model missing/unusable — refuse run (Steve-only notify)
+RFDETR_MODEL_MIN_WEIGHT_BYTES="${RFDETR_MODEL_MIN_WEIGHT_BYTES:-1000000}"
+
+_rfdetr_model_weight_ok() {
+  local pkg="${1:?}"
+  local weight="${pkg}/Data/com.apple.CoreML/weights/weight.bin"
+  local sz
+  [[ -d "$pkg" ]] || return 1
+  [[ -f "$weight" ]] || return 1
+  sz=$(stat -f %z "$weight" 2>/dev/null || echo 0)
+  [[ "$sz" -gt "${RFDETR_MODEL_MIN_WEIGHT_BYTES}" ]]
+}
+
+# Materialize RF-DETR Core ML model onto local disk (same errno-11 class as ebay_keys from Desktop/iCloud).
+# Hard-fail if the local weight.bin is missing/tiny — never fall back to Desktop under launchd.
+ensure_local_rfdetr_model() {
+  local dest_root="${HOME}/Library/Application Support/FinsAndPins/models"
+  local dest="${dest_root}/RfDetrPinDetector.mlpackage"
+  local src="${HOME}/Desktop/ClickToCollectApp/ClickToCollect/ClickToCollect/RfDetrPinDetector.mlpackage"
+  mkdir -p "$dest_root"
+
+  if [[ -n "${RFDETR_COREML_MODEL_PATH:-}" ]]; then
+    if _rfdetr_model_weight_ok "${RFDETR_COREML_MODEL_PATH}"; then
+      export RFDETR_COREML_MODEL_PATH
+      log "Using RFDETR_COREML_MODEL_PATH=${RFDETR_COREML_MODEL_PATH}"
+      return 0
+    fi
+    log "ERROR: RFDETR_COREML_MODEL_PATH is set but weight.bin missing/tiny: ${RFDETR_COREML_MODEL_PATH}"
+    return 1
+  fi
+
+  if _rfdetr_model_weight_ok "$dest"; then
+    export RFDETR_COREML_MODEL_PATH="$dest"
+    log "Local RF-DETR model ready: ${dest}"
+    return 0
+  fi
+
+  if [[ -d "$src" ]]; then
+    log "Copying RF-DETR model → ${dest} (launchd-safe local path)…"
+    rm -rf "$dest"
+    if /usr/bin/ditto "$src" "$dest" 2>/dev/null && _rfdetr_model_weight_ok "$dest"; then
+      export RFDETR_COREML_MODEL_PATH="$dest"
+      log "Local RF-DETR model ready: ${dest}"
+      return 0
+    fi
+    log "WARN: ditto of RF-DETR model failed or incomplete (Desktop path may be errno 11)"
+  fi
+
+  log "ERROR: no usable local RF-DETR model at ${dest} (need weight.bin > ${RFDETR_MODEL_MIN_WEIGHT_BYTES} bytes). Refusing Desktop/iCloud fallback under launchd."
+  return 1
 }
 
 log_pipeline_stderr() {
@@ -227,7 +288,7 @@ remove_failed_price_collection_stub() {
 materialize_inbox_board_from_canonical() {
   local inbox_file="${1:?}"
   [[ "$INBOX" == "${PREP}/BoardsToPrice" ]] && return 1
-  local canon="${PREP}/BoardsToPrice/$(basename "$inbox_file")"
+  local canon="${BOARDS_TO_PRICE_DROP_ZONE:-${PREP}/BoardsToPrice}/$(basename "$inbox_file")"
   [[ -f "$canon" ]] || return 1
   if ! board_file_bytes_ok "$canon"; then
     return 1
@@ -274,7 +335,7 @@ rollback_failed_collection_rename() {
 # Remove board photos from canonical iCloud BoardsToPrice (Lexi drop zone). Mirror mode copies into
 # BOARD_INBOX_DIR first, so these files are duplicates once the collection exists — clear so the next wave is obvious.
 clear_canonical_boards_to_price_drop_zone() {
-  local btp="${PREP}/BoardsToPrice"
+  local btp="${BOARDS_TO_PRICE_DROP_ZONE:-${PREP}/BoardsToPrice}"
   [[ -d "$btp" ]] || return 0
   find "$btp" -maxdepth 1 -type f \
     \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.JPG' -o -iname '*.JPEG' \
@@ -296,6 +357,19 @@ fi
 if ! "$PY" -c "import imagehash; from PIL import Image" 2>/dev/null; then
   log "ERROR: PinPricing venv not ready at ${PIN} (imagehash/Pillow import failed). Run PreparingInventory/launchd/install_boards_inbox_launchagent.sh to refresh Application Support .venv."
   exit 1
+fi
+
+# Preflight RF-DETR model *before* renaming the inbox — avoid partial runs that spam Lexi.
+_use_rfdetr=1
+if [[ "${PIN_PRICING_USE_RFDETR:-1}" == "0" ]] || [[ "${PIN_PRICING_USE_RFDETR:-1}" == "false" ]] || [[ "${PIN_PRICING_USE_RFDETR:-1}" == "False" ]]; then
+  _use_rfdetr=0
+fi
+if [[ "$_use_rfdetr" -eq 1 ]]; then
+  ensure_local_pricing_keys
+  if ! ensure_local_rfdetr_model; then
+    log "ERROR: aborting before inbox rename — local Core ML model missing (exit 76)"
+    exit 76
+  fi
 fi
 
 # Convert iPhone HEIC/HEIF in inbox root → JPEG (pipeline expects JPG in _staged_boards).
@@ -333,8 +407,9 @@ while IFS= read -r -d '' p; do
     fi
   fi
   if ! validate_board_file_readable "$p"; then
-    log "ERROR: inbox board not ready (iCloud may still be downloading). Wait and retry: $INBOX"
-    exit 1
+    # Exit 75 = quiet retry (watcher: short cooldown, no Lexi failure text).
+    log "QUIET_RETRY: inbox board not ready (iCloud may still be downloading). Wait and retry: $INBOX"
+    exit 75
   fi
   board_count=$((board_count + 1))
 done < <(
@@ -442,6 +517,12 @@ if [[ ! -s "${PIN_PRICING_KEYS_DIR:-${HOME}/Library/Application Support/FinsAndP
   log "ERROR: aborting before RF-DETR — local ebay_keys.json is empty (fix App Support keys / .backup)"
   exit 1
 fi
+if [[ "$_use_rfdetr" -eq 1 ]]; then
+  ensure_local_rfdetr_model || {
+    log "ERROR: aborting before RF-DETR — local Core ML model missing (exit 76)"
+    exit 76
+  }
+fi
 set +e
 (
   cd "$PIN" && "$PY" "$PL" \
@@ -489,30 +570,60 @@ fi
 if command -v python3 >/dev/null 2>&1; then
   # Pin overlay on index.html navigates to new_ctp.html; build_testing_ui only writes
   # index + ui_data. Without these pages, GitHub Pages pin-clicks 404 for Lexi.
-  review_py="${PREP}/scripts/generate_review_pages_enhanced.py"
-  if [[ -f "$review_py" ]]; then
-    log "Generating ClickToPrice/Match review pages (generate_review_pages_enhanced.py)"
+  # Prefer Application Support copy — reading the iCloud scripts/ path under launchd can
+  # silently fail (errno 11) and leave new_ctp.html missing.
+  review_py=""
+  for cand in \
+    "${LOCAL_WATCHER_BIN:-}/scripts/generate_review_pages_enhanced.py" \
+    "${PRICE_LOG_DIR:-}/../scripts/generate_review_pages_enhanced.py" \
+    "${PREP}/scripts/generate_review_pages_enhanced.py"
+  do
+    [[ -n "$cand" && -f "$cand" ]] || continue
+    # Reject empty/dataless stubs (iCloud often reports is_file with 0 bytes).
+    [[ "$(stat -f %z "$cand" 2>/dev/null || echo 0)" -gt 1000 ]] || continue
+    review_py="$cand"
+    break
+  done
+  if [[ -n "$review_py" ]]; then
+    log "Generating ClickToPrice/Match review pages (${review_py})"
+    set -o pipefail
     if ! python3 "$review_py" "$dst" 2>&1 | tee -a "$LOG_FILE"; then
+      set +o pipefail
       log "ERROR: generate_review_pages_enhanced.py failed — pin click would 404 on Pages"
       exit 1
     fi
+    set +o pipefail
   else
-    log "ERROR: missing ${review_py} — pin click would 404 on Pages (new_ctp.html never built)"
+    log "ERROR: missing generate_review_pages_enhanced.py (checked WatcherBin/scripts + PREP/scripts) — new_ctp.html never built"
     exit 1
+  fi
+  if [[ ! -f "${dst}/testing_ui_visual_baseline/new_ctp.html" ]]; then
+    log "WARN: new_ctp.html missing after generate — retrying once"
+    set -o pipefail
+    python3 "$review_py" "$dst" 2>&1 | tee -a "$LOG_FILE" || true
+    set +o pipefail
   fi
   if [[ ! -f "${dst}/testing_ui_visual_baseline/new_ctp.html" ]]; then
     log "ERROR: harness missing new_ctp.html after review-page generate — refusing to publish"
     exit 1
   fi
 
-  patch_py="${PREP}/patch_harness_ctp_scroll.py"
-  if [[ -f "$patch_py" ]]; then
-    log "Applying ClickToPrice scroll patch (patch_harness_ctp_scroll.py)"
+  patch_py=""
+  for cand in \
+    "${LOCAL_WATCHER_BIN:-}/patch_harness_ctp_scroll.py" \
+    "${PREP}/patch_harness_ctp_scroll.py"
+  do
+    [[ -n "$cand" && -f "$cand" ]] || continue
+    patch_py="$cand"
+    break
+  done
+  if [[ -n "$patch_py" ]]; then
+    log "Applying ClickToPrice scroll patch (${patch_py})"
     if ! python3 "$patch_py" "${dst}/testing_ui_visual_baseline" 2>&1 | tee -a "$LOG_FILE"; then
       log "WARN: patch_harness_ctp_scroll.py failed — ClickToPrice list may jump to top after Use this"
     fi
   else
-    log "WARN: missing ${patch_py} — launchd may be using a stale PreparingInventoryWatcherBin copy; re-run launchd/install_boards_inbox_launchagent.sh"
+    log "WARN: missing patch_harness_ctp_scroll.py — re-run launchd/install_boards_inbox_launchagent.sh"
   fi
 fi
 
@@ -561,10 +672,37 @@ EOF
 log "Wrote ${dst}/SHARE_LEXI_URL.txt"
 log "Harness: ${PAGES_URL}"
 
+# Small first-board JPEG for Lexi iMessage preview (Pages OG preview is often not ready yet).
+preview_out="${dst}/lexi_preview.jpg"
+preview_src=""
+for cand in \
+  "${dst}/_staged_boards/IMG_1.JPG" \
+  "${dst}/_staged_boards/IMG_1.jpeg" \
+  "${dst}/_staged_boards/IMG_1.jpg" \
+  "${dst}/_staged_boards/IMG_1.PNG" \
+  "${dst}/_staged_boards/IMG_1.png"
+do
+  if [[ -f "$cand" ]] && [[ "$(stat -f %z "$cand" 2>/dev/null || echo 0)" -gt 1000 ]]; then
+    preview_src="$cand"
+    break
+  fi
+done
+if [[ -z "$preview_src" ]]; then
+  preview_src=$(find "${dst}/_staged_boards" -maxdepth 1 -type f \( -iname 'IMG_1.*' -o -iname '*.jpg' -o -iname '*.jpeg' \) 2>/dev/null | LC_ALL=C sort | head -1 || true)
+fi
+if [[ -n "$preview_src" && -f "$preview_src" ]] && command -v sips >/dev/null 2>&1; then
+  if sips -Z 900 -s format jpeg "$preview_src" --out "$preview_out" >/dev/null 2>&1 \
+    && [[ -f "$preview_out" ]] && [[ "$(stat -f %z "$preview_out" 2>/dev/null || echo 0)" -gt 500 ]]; then
+    log "Preview thumb: ${preview_out}"
+  else
+    log "WARN: could not build lexi_preview.jpg from ${preview_src}"
+  fi
+fi
+
 mirror_run_to_icloud_prep || log "WARN: iCloud PREP mirror skipped"
 
 if [[ -n "${BOARD_INBOX_DIR:-}" ]]; then
-  log "Clearing canonical BoardsToPrice (${PREP}/BoardsToPrice) after successful pipeline (mirror inbox — remove duplicate iCloud copies)."
+  log "Clearing canonical BoardsToPrice (${BOARDS_TO_PRICE_DROP_ZONE:-${PREP}/BoardsToPrice}) after successful pipeline (mirror inbox — remove duplicate iCloud copies)."
   clear_canonical_boards_to_price_drop_zone
 fi
 
@@ -580,7 +718,9 @@ if [[ ! -d "${PUBLISH_REPO}/.git" ]]; then
   PUBLISH_REPO="$PREP"
 fi
 
-if [[ "$PUBLISH_REPO" != "$PREP" ]]; then
+# Hybrid layout: COL_DIR lives under PricingWork; PUBLISH_REPO may equal PREP (App Support
+# publish clone). Always copy the finished run into the publish clone when it is not already there.
+if [[ "${COL_DIR}" != "${PUBLISH_REPO}/${NEWNAME}" ]]; then
   git_with_retry git -C "$PUBLISH_REPO" pull --ff-only origin main \
     || log "WARN: publish clone pull failed — pushing anyway (may need manual sync if push is rejected)"
   copy_run_to_publish_repo || exit 1
@@ -588,6 +728,9 @@ if [[ "$PUBLISH_REPO" != "$PREP" ]]; then
   find "${PUBLISH_REPO}/BoardsToPrice" -maxdepth 1 -type f ! -name '.gitkeep' -delete 2>/dev/null || true
   mkdir -p "${PUBLISH_REPO}/BoardsToPrice"
   touch "${PUBLISH_REPO}/BoardsToPrice/.gitkeep"
+elif [[ ! -f "${PUBLISH_REPO}/${NEWNAME}/candidates.json" || ! -f "${PUBLISH_REPO}/${NEWNAME}/testing_ui_visual_baseline/index.html" ]]; then
+  # Same path unexpectedly empty — still try to copy from COL_DIR/WORK_ROOT.
+  copy_run_to_publish_repo || exit 1
 fi
 
 cd "$PUBLISH_REPO"
@@ -650,8 +793,28 @@ if [[ "$PUBLISH_REPO" != "$PREP" && -d "${PREP}/.git" ]]; then
 fi
 
 if [[ -n "${BOARD_INBOX_DIR:-}" ]]; then
-  log "Clearing canonical BoardsToPrice (${PREP}/BoardsToPrice) after successful push (mirror inbox — remove duplicate iCloud copies)."
+  log "Clearing canonical BoardsToPrice (${BOARDS_TO_PRICE_DROP_ZONE:-${PREP}/BoardsToPrice}) after successful push (mirror inbox — remove duplicate iCloud copies)."
   clear_canonical_boards_to_price_drop_zone
+fi
+
+# Optional: point related ClickToClaim show price overlay at this run's Firebase id.
+if [[ "${SKIP_CTR_WIRE:-0}" != "1" ]] && [[ -n "${CTR_SHOW_ID:-}" ]]; then
+  WIRE_SH=""
+  if [[ -n "${LOCAL_WATCHER_BIN:-}" && -x "${LOCAL_WATCHER_BIN}/wire_ctr_pricing_overlay.sh" ]]; then
+    WIRE_SH="${LOCAL_WATCHER_BIN}/wire_ctr_pricing_overlay.sh"
+  elif [[ -x "${PREP}/wire_ctr_pricing_overlay.sh" ]]; then
+    WIRE_SH="${PREP}/wire_ctr_pricing_overlay.sh"
+  fi
+  if [[ -n "$WIRE_SH" ]]; then
+    log "Wiring CTR show ${CTR_SHOW_ID} price overlay from ${COL_DIR}"
+    if /bin/bash "$WIRE_SH" --show-id "$CTR_SHOW_ID" --from-collection "$COL_DIR" --push; then
+      log "CTR price overlay wired for show ${CTR_SHOW_ID}"
+    else
+      log "WARN: CTR price overlay wire/push failed for ${CTR_SHOW_ID} — set manually via wire_ctr_pricing_overlay.sh"
+    fi
+  else
+    log "WARN: CTR_SHOW_ID=${CTR_SHOW_ID} set but wire_ctr_pricing_overlay.sh not found"
+  fi
 fi
 
 exit 0
