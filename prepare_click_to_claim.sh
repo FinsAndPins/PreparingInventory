@@ -337,6 +337,25 @@ copy_icons_with_retry() {
   return 0
 }
 
+copy_js_with_retry() {
+  local template_dir="$1"
+  local target_dir="$2"
+  local f
+  mkdir -p "${target_dir}/js"
+  [[ -d "${template_dir}/js" ]] || return 0
+  shopt -s nullglob
+  for f in "${template_dir}/js"/*; do
+    [[ -f "$f" ]] || continue
+    copy_with_retry "$f" "${target_dir}/js/$(basename "$f")" || {
+      shopt -u nullglob
+      return 1
+    }
+  done
+  shopt -u nullglob
+  log "Copied js/ assets from template"
+  return 0
+}
+
 # Patch show slug + pricing overlay Firebase run id (never leave a template's old collection).
 patch_show_html() {
   local target_dir="$1"
@@ -379,6 +398,8 @@ bootstrap_show() {
   done
   copy_icons_with_retry "$template_dir" "$target_dir" \
     || die "Failed copying icons from template ${template_id}"
+  copy_js_with_retry "$template_dir" "$target_dir" \
+    || die "Failed copying js/ from template ${template_id}"
   ensure_collection_detection_promo_asset "$target_dir" "$template_dir" \
     || die "Failed placing collection-detection-app-square.png"
   patch_show_html "$target_dir" "$show_id"
