@@ -2466,6 +2466,69 @@ def _patch_index_overlay_pin_click(index_path: pathlib.Path) -> None:
     print(f'Patched overlay pin-click in {index_path.name}')
 
 
+def _sync_index_embedded_from_ui(idx_path: pathlib.Path, ui: dict) -> None:
+    """Keep overlay index.html embedded payload on the same Firebase test_run_id as ui_data.
+
+    Overlay loads matches from the embedded b64, not ui_data.json. Rebuilding
+    build_testing_ui.py from a collection folder name can write a shorter test_run_id
+    and hide existing Match data.
+    """
+    if not idx_path.is_file():
+        return
+    want_tri = str((ui or {}).get('test_run_id') or '').strip()
+    if not want_tri:
+        return
+    html = idx_path.read_text(encoding='utf-8')
+    chunks = re.findall(
+        r'(<script[^>]*class="embedded-ui-b64-chunk"[^>]*data-chunk-index="(\d+)"[^>]*>)(.*?)(</script>)',
+        html, re.DOTALL)
+    if not chunks:
+        print('WARN: no overlay embed chunks; skip test_run_id sync')
+        return
+    chunks.sort(key=lambda x: int(x[1]))
+    b64 = ''.join(c[2].strip() for c in chunks)
+    try:
+        payload = json.loads(_b64.b64decode(b64).decode('utf-8'))
+    except Exception as e:
+        print(f'  WARN: overlay embed decode failed: {e}')
+        return
+    cur = str(payload.get('test_run_id') or '')
+    changed = False
+    if payload.get('test_run_id') != want_tri:
+        payload['test_run_id'] = want_tri
+        changed = True
+    src = str((ui or {}).get('source_run_id') or '').strip()
+    if src and payload.get('source_run_id') != src:
+        payload['source_run_id'] = src
+        changed = True
+    for key in ('load_existing_from_firebase', 'firebase_collab'):
+        if key in (ui or {}) and payload.get(key) != ui.get(key):
+            payload[key] = ui.get(key)
+            changed = True
+    if not changed:
+        print('Overlay embed test_run_id already matches ui_data.json')
+        return
+    new_b64 = _b64.b64encode(json.dumps(payload, separators=(',', ':')).encode('utf-8')).decode('ascii')
+    first = re.search(r'<script[^>]*class="embedded-ui-b64-chunk"[^>]*data-chunk-index="0"[^>]*>', html)
+    last_idx = max(int(c[1]) for c in chunks)
+    last = re.search(
+        rf'<script[^>]*class="embedded-ui-b64-chunk"[^>]*data-chunk-index="{last_idx}"[^>]*>.*?</script>',
+        html, re.DOTALL)
+    if not first or not last:
+        print('  WARN: could not locate overlay embed chunks to rewrite')
+        return
+    embed_chunk = 800_000
+    parts = []
+    for off in range(0, len(new_b64), embed_chunk):
+        ci = len(parts)
+        parts.append(
+            f'<script type="text/plain" class="embedded-ui-b64-chunk" data-chunk-index="{ci}">{new_b64[off:off + embed_chunk]}</script>'
+        )
+    html = html[:first.start()] + '\n  '.join(parts) + html[last.end():]
+    idx_path.write_text(html, encoding='utf-8')
+    print(f'  Synced overlay embed test_run_id: {cur} -> {want_tri}')
+
+
 # ── Entry point ────────────────────────────────────────────────────────────
 def _load_firebase_export(export_path: pathlib.Path) -> dict:
     """Load pin entries from a Firebase RTDB export JSON file."""
@@ -2539,6 +2602,7 @@ def main():
     # Slot Review retired — CTM always uses slot 0; do not generate nts_review.html.
     _patch_index_hamburger(idx_path)
     _patch_index_overlay_pin_click(idx_path)
+    _sync_index_embedded_from_ui(idx_path, data)
     print('Done.')
 
 
