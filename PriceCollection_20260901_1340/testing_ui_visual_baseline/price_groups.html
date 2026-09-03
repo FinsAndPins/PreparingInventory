@@ -98,6 +98,7 @@ const FB_CFG = {"apiKey":"AIzaSyB5HoTCon9uIFJqnF506tB_jORAG1HvI7o","authDomain":
 const TEST_RUN_ID = "test_PriceCollection_20260901_1340__build_20260903_fullres_visual_baseline";
 const APPROACH_ID = "visual_baseline";
 const RUN_NAME = "PriceCollection_20260901_1340";
+const CROP_BASE = "https://raw.githubusercontent.com/FinsAndPins/PreparingInventory/main/PriceCollection_20260901_1340/crops/";
 
 const BANDS = [
   {id:'le10', label:'<=$10', lo:1, hi:10},
@@ -249,8 +250,8 @@ function render() {
       card.dataset.pk = p.pk;
       const img = document.createElement('img');
       img.loading = 'lazy';
-      img.src = p.crop ? ('../crops/' + encodeURIComponent(p.crop)) : '';
-      img.alt = (p.board_num || '?') + '-' + (p.pin_n || '?');
+      img.src = p.crop ? (CROP_BASE + encodeURIComponent(p.crop)) : '';
+      img.alt = '';
       const pr = document.createElement('div');
       pr.className = 'price';
       pr.textContent = overlayPriceText(p);
