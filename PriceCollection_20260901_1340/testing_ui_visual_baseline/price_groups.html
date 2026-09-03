@@ -49,8 +49,8 @@ a.back-btn{color:#4a9eff;font-size:13px;text-decoration:none;padding:4px 0;white
   border:1px solid #222;pointer-events:none;line-height:1}
 .card .tag{
   position:absolute;left:3px;bottom:3px;background:rgba(0,0,0,.75);
-  color:#ddd;font-size:10px;font-weight:600;padding:2px 4px;border-radius:3px;
-  pointer-events:none}
+  color:#ddd;font-size:9px;font-weight:600;padding:2px 4px;border-radius:3px;
+  pointer-events:none;white-space:nowrap}
 .empty{padding:28px 14px;text-align:center;color:#888;font-size:14px}
 </style>
 </head>
@@ -138,9 +138,21 @@ function bandIdFor(price) {
   if (p <= 99) return 'b90';
   return 'b100';
 }
-function boardSortKey(bn) {
-  const n = parseInt(String(bn || ''), 10);
-  return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY;
+const BOARD_ORD = (() => {
+  const m = {};
+  let n = 0;
+  for (const p of PINS) {
+    const bn = String(p.board_num || '');
+    if (bn && m[bn] == null) m[bn] = ++n;
+  }
+  return m;
+})();
+function boardOrdinal(p) {
+  const n = BOARD_ORD[String(p && p.board_num || '')];
+  return n ? String(n) : '?';
+}
+function boardPinLabel(p) {
+  return 'Board ' + boardOrdinal(p) + ' · Pin ' + (p && p.pin_n != null ? p.pin_n : '?');
 }
 function overlayPriceText(p) {
   const v = roundMoney(p.price);
@@ -201,11 +213,9 @@ function render() {
   }
   for (const id of Object.keys(groups)) {
     groups[id].sort((a, b) => {
-      const db = boardSortKey(a.board_num) - boardSortKey(b.board_num);
-      if (db) return db;
-      const sa = String(a.board_num || '');
-      const sb = String(b.board_num || '');
-      if (sa !== sb) return sa < sb ? -1 : 1;
+      const da = Number(BOARD_ORD[String(a.board_num)] || 9999);
+      const db = Number(BOARD_ORD[String(b.board_num)] || 9999);
+      if (da !== db) return da - db;
       return (a.pin_n || 0) - (b.pin_n || 0);
     });
   }
@@ -257,7 +267,7 @@ function render() {
       pr.textContent = overlayPriceText(p);
       const tag = document.createElement('div');
       tag.className = 'tag';
-      tag.textContent = (p.board_num || '?') + ' · ' + (p.pin_n || '?');
+      tag.textContent = boardPinLabel(p);
       card.append(img, pr, tag);
       card.addEventListener('click', () => {
         window.location.href = 'new_ctp.html?filter=all&pin=' + encodeURIComponent(p.pk);
