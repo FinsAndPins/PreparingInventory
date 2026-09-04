@@ -1,0 +1,84 @@
+{
+  "predictions": [
+    {
+      "x": 3318.984375,
+      "y": 1957.921875,
+      "width": 1434.97265625,
+      "height": 2186.625,
+      "confidence": 0.9457011222839355,
+      "class": "pin"
+    },
+    {
+      "x": 3427.7578125,
+      "y": 4016.25,
+      "width": 1408.4765625,
+      "height": 2097.375,
+      "confidence": 0.9429286122322083,
+      "class": "pin"
+    },
+    {
+      "x": 800.4609375,
+      "y": 4046.9296875,
+      "width": 1461.46875,
+      "height": 2079.24609375,
+      "confidence": 0.9400236010551453,
+      "class": "pin"
+    },
+    {
+      "x": 2020.67578125,
+      "y": 1964.89453125,
+      "width": 1282.96875,
+      "height": 2140.60546875,
+      "confidence": 0.9353464841842651,
+      "class": "pin"
+    },
+    {
+      "x": 772.5703125,
+      "y": 1996.96875,
+      "width": 1356.181640625,
+      "height": 2142.0,
+      "confidence": 0.9317114353179932,
+      "class": "pin"
+    },
+    {
+      "x": 2144.7890625,
+      "y": 4027.40625,
+      "width": 1388.953125,
+      "height": 2094.5859375,
+      "confidence": 0.9246877431869507,
+      "class": "pin"
+    }
+  ],
+  "image": {
+    "width": 4284,
+    "height": 5712
+  },
+  "_pin_tools_meta": {
+    "pin_dedupe": {
+      "rule_id": "pin_dedupe_nms_v2",
+      "pass1": {
+        "rule_id": "pin_dedupe_nms_v1",
+        "method": "greedy_iou_nms_keep_highest_confidence",
+        "iou_threshold": 0.85,
+        "raw_prediction_count": 6,
+        "deduped_prediction_count": 6,
+        "removed_count": 0
+      },
+      "pass2": {
+        "rule_id": "pin_dedupe_nms_v1",
+        "method": "greedy_iou_nms_keep_highest_confidence",
+        "iou_threshold": 0.42,
+        "raw_prediction_count": 6,
+        "deduped_prediction_count": 6,
+        "removed_count": 0
+      },
+      "iou_primary": 0.85,
+      "iou_secondary": 0.42,
+      "raw_prediction_count": 6,
+      "deduped_prediction_count": 6,
+      "removed_count_pass1": 0,
+      "removed_count_pass2": 0,
+      "removed_count_total": 0
+    }
+  }
+}
