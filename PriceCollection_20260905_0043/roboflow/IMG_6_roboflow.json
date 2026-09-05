@@ -1,0 +1,180 @@
+{
+  "predictions": [
+    {
+      "x": 1121.431640625,
+      "y": 951.029296875,
+      "width": 217.224609375,
+      "height": 357.69140625,
+      "confidence": 0.9471859931945801,
+      "class": "pin"
+    },
+    {
+      "x": 292.8310546875,
+      "y": 707.70703125,
+      "width": 253.30078125,
+      "height": 420.2490234375,
+      "confidence": 0.9444848895072937,
+      "class": "pin"
+    },
+    {
+      "x": 508.904296875,
+      "y": 273.6416015625,
+      "width": 435.984375,
+      "height": 460.9306640625,
+      "confidence": 0.9437636137008667,
+      "class": "pin"
+    },
+    {
+      "x": 691.2041015625,
+      "y": 719.220703125,
+      "width": 288.9931640625,
+      "height": 424.470703125,
+      "confidence": 0.9130582809448242,
+      "class": "pin"
+    },
+    {
+      "x": 928.001953125,
+      "y": 947.958984375,
+      "width": 206.28662109375,
+      "height": 217.224609375,
+      "confidence": 0.9039745330810547,
+      "class": "pin"
+    },
+    {
+      "x": 1263.43359375,
+      "y": 292.0634765625,
+      "width": 242.1708984375,
+      "height": 302.23388671875,
+      "confidence": 0.8994751572608948,
+      "class": "pin"
+    },
+    {
+      "x": 733.037109375,
+      "y": 1046.4691162109375,
+      "width": 241.97900390625,
+      "height": 267.061767578125,
+      "confidence": 0.8951566815376282,
+      "class": "pin"
+    },
+    {
+      "x": 1129.107421875,
+      "y": 210.31640625,
+      "width": 194.101318359375,
+      "height": 282.8525390625,
+      "confidence": 0.8834372758865356,
+      "class": "pin"
+    },
+    {
+      "x": 1378.5703125,
+      "y": 571.4619140625,
+      "width": 213.0029296875,
+      "height": 302.8095703125,
+      "confidence": 0.8713654279708862,
+      "class": "pin"
+    },
+    {
+      "x": 904.20703125,
+      "y": 676.236328125,
+      "width": 232.9599609375,
+      "height": 345.98583984375,
+      "confidence": 0.8625832796096802,
+      "class": "pin"
+    },
+    {
+      "x": 476.2822265625,
+      "y": 967.1484375,
+      "width": 253.49267578125,
+      "height": 315.28271484375,
+      "confidence": 0.8570517301559448,
+      "class": "pin"
+    },
+    {
+      "x": 971.75390625,
+      "y": 165.029296875,
+      "width": 214.34619140625,
+      "height": 301.85009765625,
+      "confidence": 0.8542778491973877,
+      "class": "pin"
+    },
+    {
+      "x": 452.87109375,
+      "y": 681.609375,
+      "width": 209.1650390625,
+      "height": 342.53173828125,
+      "confidence": 0.8034823536872864,
+      "class": "pin"
+    },
+    {
+      "x": 1064.630859375,
+      "y": 638.625,
+      "width": 212.619140625,
+      "height": 295.70947265625,
+      "confidence": 0.723504900932312,
+      "class": "pin"
+    },
+    {
+      "x": 1029.322265625,
+      "y": 409.88671875,
+      "width": 247.35205078125,
+      "height": 214.5380859375,
+      "confidence": 0.6682310700416565,
+      "class": "pin"
+    },
+    {
+      "x": 810.5625,
+      "y": 292.447265625,
+      "width": 198.22705078125,
+      "height": 447.498046875,
+      "confidence": 0.5768399834632874,
+      "class": "pin"
+    },
+    {
+      "x": 1240.40625,
+      "y": 631.716796875,
+      "width": 252.9169921875,
+      "height": 394.9189453125,
+      "confidence": 0.48675087094306946,
+      "class": "pin"
+    },
+    {
+      "x": 1258.060546875,
+      "y": 770.6484680175781,
+      "width": 229.31396484375,
+      "height": 115.71234130859375,
+      "confidence": 0.36048904061317444,
+      "class": "pin"
+    }
+  ],
+  "image": {
+    "width": 1572,
+    "height": 1180
+  },
+  "_pin_tools_meta": {
+    "pin_dedupe": {
+      "rule_id": "pin_dedupe_nms_v2",
+      "pass1": {
+        "rule_id": "pin_dedupe_nms_v1",
+        "method": "greedy_iou_nms_keep_highest_confidence",
+        "iou_threshold": 0.85,
+        "raw_prediction_count": 22,
+        "deduped_prediction_count": 22,
+        "removed_count": 0
+      },
+      "pass2": {
+        "rule_id": "pin_dedupe_nms_v1",
+        "method": "greedy_iou_nms_keep_highest_confidence",
+        "iou_threshold": 0.42,
+        "raw_prediction_count": 22,
+        "deduped_prediction_count": 18,
+        "removed_count": 4
+      },
+      "iou_primary": 0.85,
+      "iou_secondary": 0.42,
+      "raw_prediction_count": 22,
+      "deduped_prediction_count": 18,
+      "removed_count_pass1": 0,
+      "removed_count_pass2": 4,
+      "removed_count_total": 4
+    }
+  }
+}
