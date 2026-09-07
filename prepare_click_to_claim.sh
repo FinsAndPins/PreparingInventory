@@ -2,7 +2,8 @@
 # Prepare ClickToClaim from exactly one dated folder under ClickToRequest/.
 #
 # Flow: discover input → bootstrap show template → RF-DETR detect → validate →
-#       update shows_index.json → path-limited git commit/push → delete input folder.
+#       copy show into local-disk publish clone → update shows_index.json →
+#       path-limited git commit/push → delete input folder.
 #
 # Optional env:
 #   DRY_RUN=1           — print plan only; no file changes, detect, git, or delete
@@ -19,6 +20,9 @@
 #   PIN_PRICING_RFDETR_DIR — RF-DETR venv root (PinPricingStudyMVP_RFDETR_TEST)
 #   RFDETR_COREML_MODEL_PATH — Core ML model .mlpackage (prefer Application Support local copy)
 #   PIN_PRICING_RFDETR_MIN_CONF — min confidence (default 0.25)
+#   CTR_PUBLISH_REPO    — local-disk git clone for commit/push (default: Application Support/
+#                         FinsAndPins/ClickToClaimGit). Avoids iCloud .git deadlock under launchd.
+#                         Board outputs still land under CTR_REPO (iCloud) for local editing.
 #
 set -euo pipefail
 set +H
@@ -31,6 +35,9 @@ CTR_MIRROR_DIR="${CTR_MIRROR_DIR:-}"
 CTR_INPUT_DIR="${CTR_INPUT_DIR:-}"
 CTR_REPO="${HOME}/Library/Mobile Documents/com~apple~CloudDocs/GitHub Repository/ClickToClaim"
 FINS_LOCAL="${HOME}/Library/Application Support/FinsAndPins"
+# Publish clone on local disk (same role as PreparingInventoryGit for pricing).
+CTR_PUBLISH_REPO_DEFAULT="${FINS_LOCAL}/ClickToClaimGit"
+CTR_PUBLISH_REPO="${CTR_PUBLISH_REPO:-$CTR_PUBLISH_REPO_DEFAULT}"
 PIN_DIR_ICLOUD="${HOME}/Library/Mobile Documents/com~apple~CloudDocs/Cursor Projects/PinPricingStudyMVP_RFDETR_TEST"
 PIN_DIR_LOCAL="${FINS_LOCAL}/PinPricingStudyMVP_RFDETR_TEST"
 # Prefer Application Support under launchd — iCloud .rfdetr_py39 often fails numpy mmap (errno 11).
@@ -47,7 +54,12 @@ LIVE_BASE="https://finsandpins.github.io/ClickToClaim"
 DETECT_PY="${PREP}/detect_boards_rfdetr_for_ctr.py"
 VALIDATE_PY="${PREP}/validate_ctr_boards.py"
 PATCH_PY="${PREP}/patch_ctr_show_slug.py"
-UPDATE_INDEX_PY="${CTR_REPO}/update_shows_index.py"
+# Prefer update_shows_index.py from the publish clone when present (local disk).
+if [[ -f "${CTR_PUBLISH_REPO}/update_shows_index.py" ]]; then
+  UPDATE_INDEX_PY="${CTR_PUBLISH_REPO}/update_shows_index.py"
+else
+  UPDATE_INDEX_PY="${CTR_REPO}/update_shows_index.py"
+fi
 
 mkdir -p "$LOG_DIR"
 
@@ -68,6 +80,91 @@ die() {
 die_commit_pending() {
   log "ERROR: $*"
   exit 4
+}
+
+resolve_publish_repo() {
+  # Prefer local-disk ClickToClaimGit; fall back to iCloud CTR_REPO only if missing.
+  if [[ -d "${CTR_PUBLISH_REPO}/.git" ]]; then
+    echo "$CTR_PUBLISH_REPO"
+    return 0
+  fi
+  if [[ -d "${CTR_PUBLISH_REPO_DEFAULT}/.git" ]]; then
+    echo "$CTR_PUBLISH_REPO_DEFAULT"
+    return 0
+  fi
+  log "WARN: publish clone missing (${CTR_PUBLISH_REPO}) — falling back to iCloud CTR_REPO git (less reliable under launchd)"
+  echo "$CTR_REPO"
+}
+
+icloud_git_contention() {
+  # stderr from git/python under Mobile Documents often looks like these.
+  echo "${1:-}" | grep -qiE 'deadlock|Resource deadlock|mmap|fcopyfile|not a git repository|COMMIT_EDITMSG|Unable to create .+index\.lock|Operation timed out'
+}
+
+show_manifest_published() {
+  # True if boards/manifest.json is on origin/main (or local HEAD of publish clone).
+  # Do not trust iCloud CTR_REPO HEAD — it is often behind / flaky under launchd.
+  local show_id="$1"
+  local pub
+  pub="$(resolve_publish_repo)"
+  local path="${show_id}/boards/manifest.json"
+  if git -C "$pub" fetch origin main >/dev/null 2>&1; then
+    if git -C "$pub" cat-file -e "origin/main:${path}" 2>/dev/null; then
+      return 0
+    fi
+  fi
+  if git -C "$pub" cat-file -e "HEAD:${path}" 2>/dev/null; then
+    return 0
+  fi
+  return 1
+}
+
+copy_show_to_publish_repo() {
+  local show_id="$1"
+  local pub="$2"
+  local src="${CTR_REPO}/${show_id}"
+  local dest="${pub}/${show_id}"
+  local n
+  if [[ ! -d "$src" ]]; then
+    die "Missing show folder to publish: ${src}"
+  fi
+  mkdir -p "$dest"
+  for n in 1 2 3; do
+    if /usr/bin/rsync -a --delete \
+      --exclude '.DS_Store' \
+      "${src}/" "${dest}/" >>"${LOG_FILE:-/dev/null}" 2>&1; then
+      if [[ -f "${dest}/boards/manifest.json" && -f "${dest}/index.html" \
+        && -f "${dest}/collection-detection-app-square.png" ]]; then
+        log "Copied ${show_id}/ → publish clone (attempt ${n})"
+        break
+      fi
+    fi
+    log "WARN: rsync show → publish clone incomplete (attempt ${n}/3)"
+    sleep 3
+    if (( n == 3 )); then
+      die_commit_pending "could not copy ${show_id}/ into publish clone after 3 attempts"
+    fi
+  done
+
+  if [[ -d "${CTR_REPO}/BoardBoxEditor/${show_id}" ]]; then
+    mkdir -p "${pub}/BoardBoxEditor/${show_id}"
+    for n in 1 2 3; do
+      if /usr/bin/rsync -a --delete \
+        --exclude '.DS_Store' \
+        "${CTR_REPO}/BoardBoxEditor/${show_id}/" \
+        "${pub}/BoardBoxEditor/${show_id}/" >>"${LOG_FILE:-/dev/null}" 2>&1; then
+        if [[ -f "${pub}/BoardBoxEditor/${show_id}/index.html" ]]; then
+          log "Copied BoardBoxEditor/${show_id}/ → publish clone (attempt ${n})"
+          break
+        fi
+      fi
+      log "WARN: rsync BoardBoxEditor → publish clone incomplete (attempt ${n}/3)"
+      sleep 3
+      if (( n == 3 )); then
+        die_commit_pending "could not copy BoardBoxEditor/${show_id}/ into publish clone"
+      fi
+    done
+  fi
 }
 
 is_yyyymmdd() {
@@ -502,107 +599,171 @@ preflight_rfdetr() {
 commit_and_push() {
   local show_id="$1"
   local promo_rel="${show_id}/collection-detection-app-square.png"
-  cd "$CTR_REPO"
-  if [[ ! -d .git ]]; then
-    die "ClickToClaim repo has no .git at ${CTR_REPO}"
+  local pub
+  pub="$(resolve_publish_repo)"
+  log "Publish git repo: ${pub}"
+
+  if [[ ! -d "${pub}/.git" ]]; then
+    die "ClickToClaim publish repo has no .git at ${pub}"
   fi
+
+  # Fast-forward publish clone before copying (keeps push simple; avoids iCloud .git).
+  local sync_err=""
+  if ! sync_err=$(git -C "$pub" fetch origin main 2>&1); then
+    if icloud_git_contention "$sync_err"; then
+      die_commit_pending "git fetch failed (contention): ${sync_err}"
+    fi
+    log "WARN: git fetch: ${sync_err}"
+  fi
+  if ! sync_err=$(git -C "$pub" checkout main 2>&1); then
+    die_commit_pending "git checkout main failed in publish clone: ${sync_err}"
+  fi
+  if ! sync_err=$(git -C "$pub" pull --ff-only origin main 2>&1); then
+    # Already up to date is fine; real failures need retry.
+    if ! echo "$sync_err" | grep -qiE 'Already up to date|up to date'; then
+      die_commit_pending "git pull --ff-only failed in publish clone: ${sync_err}"
+    fi
+  fi
+
+  # If another machine already published this show, skip commit (cleanup happens in main).
+  if git -C "$pub" cat-file -e "HEAD:${show_id}/boards/manifest.json" 2>/dev/null \
+    || git -C "$pub" cat-file -e "origin/main:${show_id}/boards/manifest.json" 2>/dev/null; then
+    log "Show ${show_id} already present on publish clone / origin/main — skipping commit/push"
+    return 0
+  fi
+
+  copy_show_to_publish_repo "$show_id" "$pub"
+
+  if [[ ! -f "${pub}/${promo_rel}" ]]; then
+    die "Missing ${pub}/${promo_rel} — refuse to publish show without Collection Detection promo icon"
+  fi
+
+  # Stage show paths first so update_shows_index (git ls-files) sees the new bundle.
+  (
+    cd "$pub"
+    git add "${show_id}/"
+    git add "$promo_rel"
+    if [[ -d "BoardBoxEditor/${show_id}" ]]; then
+      git add "BoardBoxEditor/${show_id}/"
+    fi
+  ) || die_commit_pending "git add of show paths failed in publish clone"
 
   if [[ -f "$UPDATE_INDEX_PY" ]] && command -v python3 >/dev/null 2>&1; then
-    log "Updating shows_index.json"
-    CTR_REPO_ROOT="$CTR_REPO" python3 "$UPDATE_INDEX_PY" 2>&1 | tee -a "$LOG_FILE" || log "WARN: update_shows_index.py failed"
-  fi
-
-  if [[ ! -f "$promo_rel" ]]; then
-    die "Missing ${promo_rel} — refuse to publish show without Collection Detection promo icon"
-  fi
-
-  git add "${show_id}/"
-  git add "$promo_rel"
-  if [[ -d "BoardBoxEditor/${show_id}" ]]; then
-    git add "BoardBoxEditor/${show_id}/"
-  fi
-  if [[ -f shows_index.json ]]; then
-    git add shows_index.json
+    log "Updating shows_index.json (publish clone)"
+    local idx_attempt=1
+    local idx_ok=0
+    local idx_err=""
+    while (( idx_attempt <= 5 )); do
+      if idx_err=$(CTR_REPO_ROOT="$pub" python3 "$UPDATE_INDEX_PY" 2>&1); then
+        echo "$idx_err" | tee -a "${LOG_FILE:-/dev/null}"
+        idx_ok=1
+        break
+      fi
+      echo "$idx_err" | tee -a "${LOG_FILE:-/dev/null}"
+      if icloud_git_contention "$idx_err"; then
+        log "WARN: update_shows_index contention (attempt ${idx_attempt}/5)"
+        sleep $((idx_attempt * 2))
+        idx_attempt=$((idx_attempt + 1))
+        continue
+      fi
+      log "WARN: update_shows_index.py failed"
+      break
+    done
+    if (( idx_ok == 1 )) && [[ -f "${pub}/shows_index.json" ]]; then
+      git -C "$pub" add shows_index.json || true
+    fi
   fi
 
   local allowed_re="^(${show_id}/|BoardBoxEditor/${show_id}/|shows_index\.json\$)"
   local bad
-  bad=$(git diff --cached --name-only | grep -Ev "$allowed_re" || true)
+  bad=$(git -C "$pub" diff --cached --name-only | grep -Ev "$allowed_re" || true)
   if [[ -n "$bad" ]]; then
     log "ERROR: unrelated paths staged — aborting commit:"
     log "$bad"
-    git reset HEAD
-    die "Refusing broad staging in ClickToClaim repo"
+    git -C "$pub" reset HEAD
+    die "Refusing broad staging in ClickToClaim publish repo"
   fi
 
-  if git diff --cached --quiet; then
+  if git -C "$pub" diff --cached --quiet; then
+    # Race: remote gained the show between our check and staging.
+    if show_manifest_published "$show_id"; then
+      log "Nothing staged and show already on remote — treating commit as done"
+      git -C "$pub" reset HEAD >/dev/null 2>&1 || true
+      return 0
+    fi
     die "Nothing staged to commit (unexpected after detect)"
   fi
 
-  # ClickToClaim lives under iCloud; git commit can fail with
-  # "could not open '.git/COMMIT_EDITMSG': Resource deadlock avoided".
-  # Prefer -F with a message file outside iCloud; clear stale COMMIT_EDITMSG between tries.
   local commit_msg="Add ClickToClaim show ${show_id} (RF-DETR boards from ClickToRequest)."
   local msg_file
   msg_file="$(mktemp "${TMPDIR:-/tmp}/ctr_commit_msg.XXXXXX")"
   printf '%s\n' "$commit_msg" >"$msg_file"
   local attempt=1
-  local max_attempts=12
+  local max_attempts=8
   local commit_err=""
   local committed=0
   local sleep_sec=0
   while (( attempt <= max_attempts )); do
-    rm -f .git/COMMIT_EDITMSG .git/index.lock 2>/dev/null || true
-    if commit_err=$(git commit -F "$msg_file" 2>&1); then
+    rm -f "${pub}/.git/COMMIT_EDITMSG" "${pub}/.git/index.lock" 2>/dev/null || true
+    if commit_err=$(git -C "$pub" commit -F "$msg_file" 2>&1); then
       committed=1
-      log "Committed on attempt ${attempt}."
+      log "Committed on attempt ${attempt} (publish clone)."
       break
     fi
-    if echo "$commit_err" | grep -qiE 'deadlock|Resource deadlock|COMMIT_EDITMSG'; then
-      sleep_sec=$(( attempt * 5 ))
-      if (( sleep_sec > 60 )); then sleep_sec=60; fi
-      log "WARN: git commit hit iCloud/fs contention (attempt ${attempt}/${max_attempts}, sleep ${sleep_sec}s): ${commit_err}"
+    if icloud_git_contention "$commit_err"; then
+      sleep_sec=$(( attempt * 3 ))
+      if (( sleep_sec > 30 )); then sleep_sec=30; fi
+      log "WARN: git commit contention (attempt ${attempt}/${max_attempts}, sleep ${sleep_sec}s): ${commit_err}"
       sleep "$sleep_sec"
       attempt=$((attempt + 1))
       continue
     fi
     rm -f "$msg_file" 2>/dev/null || true
     log "ERROR: git commit failed: ${commit_err}"
-    die "git commit failed"
+    die_commit_pending "git commit failed in publish clone: ${commit_err}"
   done
   rm -f "$msg_file" 2>/dev/null || true
   if (( committed != 1 )); then
-    die_commit_pending "git commit failed after ${max_attempts} attempts (iCloud deadlock on .git). Boards are ready under ${show_id}/ — watcher will retry commit/push soon (or re-run prepare)."
+    die_commit_pending "git commit failed after ${max_attempts} attempts. Boards are ready under ${CTR_REPO}/${show_id}/ — watcher will retry commit/push soon."
   fi
 
-  log "Committed. Pushing origin main…"
+  # Refresh sort order now that the show has a commit timestamp.
+  if [[ -f "$UPDATE_INDEX_PY" ]] && command -v python3 >/dev/null 2>&1; then
+    if CTR_REPO_ROOT="$pub" python3 "$UPDATE_INDEX_PY" 2>&1 | tee -a "${LOG_FILE:-/dev/null}"; then
+      if ! git -C "$pub" diff --quiet -- shows_index.json 2>/dev/null; then
+        git -C "$pub" add shows_index.json
+        git -C "$pub" commit -m "Refresh shows_index.json after ${show_id}." 2>&1 | tee -a "${LOG_FILE:-/dev/null}" || true
+      fi
+    fi
+  fi
+
+  log "Committed. Pushing origin main (publish clone)…"
   attempt=1
   local push_err=""
   local pushed=0
   while (( attempt <= max_attempts )); do
-    if push_err=$(git push origin main 2>&1); then
+    if push_err=$(git -C "$pub" push origin main 2>&1); then
       pushed=1
       log "Push complete on attempt ${attempt}."
       break
     fi
-    # Common when another machine/agent pushed while RF-DETR was running.
     if echo "$push_err" | grep -qiE 'non-fast-forward|fetch first|behind'; then
       log "WARN: push rejected (non-fast-forward). Pulling --rebase then retrying (attempt ${attempt}/${max_attempts})"
-      if ! git pull --rebase origin main 2>&1 | tee -a "$LOG_FILE"; then
+      if ! git -C "$pub" pull --rebase origin main 2>&1 | tee -a "${LOG_FILE:-/dev/null}"; then
         log "ERROR: git pull --rebase failed after non-fast-forward push"
         die_commit_pending "git pull --rebase failed; resolve manually then push ${show_id}"
       fi
       attempt=$((attempt + 1))
       continue
     fi
-    sleep_sec=$(( attempt * 5 ))
-    if (( sleep_sec > 60 )); then sleep_sec=60; fi
+    sleep_sec=$(( attempt * 3 ))
+    if (( sleep_sec > 30 )); then sleep_sec=30; fi
     log "WARN: git push failed (attempt ${attempt}/${max_attempts}, sleep ${sleep_sec}s): ${push_err}"
     sleep "$sleep_sec"
     attempt=$((attempt + 1))
   done
   if (( pushed != 1 )); then
-    die_commit_pending "git push failed after ${max_attempts} attempts. Commit is local — watcher will retry push, or push manually."
+    die_commit_pending "git push failed after ${max_attempts} attempts. Commit is local in ${pub} — watcher will retry push, or push manually."
   fi
   log "Push complete."
 }
@@ -645,10 +806,10 @@ LIVE_URL="${LIVE_BASE}/${SHOW_ID}/"
 RECOVERY_COMMIT_ONLY=0
 scrub_failed_bootstrap "$TARGET_DIR"
 if has_board_outputs "$TARGET_DIR"; then
-  if git -C "$CTR_REPO" cat-file -e "HEAD:${SHOW_ID}/boards/manifest.json" 2>/dev/null; then
-    # Boards already published (e.g. manual commit/push after iCloud deadlock).
+  if show_manifest_published "$SHOW_ID"; then
+    # Boards already on origin/main (e.g. manual push after iCloud deadlock, or prior success).
     # Clean leftover drop-zone folders and exit success so the watcher can mark processed.
-    log "Show ${SHOW_ID} already on HEAD with board outputs — treating as success; cleaning leftover input"
+    log "Show ${SHOW_ID} already on origin/main with board outputs — treating as success; cleaning leftover input"
     if [[ "${SKIP_DELETE:-0}" != "1" ]]; then
       if [[ -d "$INPUT_DIR" ]]; then
         log "Removing leftover input folder: ${INPUT_DIR}"
@@ -672,7 +833,7 @@ if has_board_outputs "$TARGET_DIR"; then
     exit 0
   fi
   # Boards finished previously but commit/push failed (e.g. iCloud deadlock).
-  log "Recovering: board outputs exist locally but ${SHOW_ID} is not on HEAD — commit/push only"
+  log "Recovering: board outputs exist locally but ${SHOW_ID} is not on origin/main — commit/push only"
   RECOVERY_COMMIT_ONLY=1
 fi
 
