@@ -1,0 +1,84 @@
+{
+  "predictions": [
+    {
+      "x": 1896.5625,
+      "y": 1605.10546875,
+      "width": 1436.3671875,
+      "height": 2029.04296875,
+      "confidence": 0.954308032989502,
+      "class": "pin"
+    },
+    {
+      "x": 564.78515625,
+      "y": 2895.046875,
+      "width": 1053.568359375,
+      "height": 1496.33203125,
+      "confidence": 0.9515940546989441,
+      "class": "pin"
+    },
+    {
+      "x": 3291.09375,
+      "y": 3818.2265625,
+      "width": 1423.119140625,
+      "height": 2115.50390625,
+      "confidence": 0.9477691650390625,
+      "class": "pin"
+    },
+    {
+      "x": 3341.296875,
+      "y": 1623.234375,
+      "width": 1592.5546875,
+      "height": 2238.22265625,
+      "confidence": 0.9458011984825134,
+      "class": "pin"
+    },
+    {
+      "x": 727.9453125,
+      "y": 1361.759765625,
+      "width": 1023.5859375,
+      "height": 1517.25,
+      "confidence": 0.9303317666053772,
+      "class": "pin"
+    },
+    {
+      "x": 1931.42578125,
+      "y": 3779.1796875,
+      "width": 1402.201171875,
+      "height": 2098.76953125,
+      "confidence": 0.9100669622421265,
+      "class": "pin"
+    }
+  ],
+  "image": {
+    "width": 4284,
+    "height": 5712
+  },
+  "_pin_tools_meta": {
+    "pin_dedupe": {
+      "rule_id": "pin_dedupe_nms_v2",
+      "pass1": {
+        "rule_id": "pin_dedupe_nms_v1",
+        "method": "greedy_iou_nms_keep_highest_confidence",
+        "iou_threshold": 0.85,
+        "raw_prediction_count": 6,
+        "deduped_prediction_count": 6,
+        "removed_count": 0
+      },
+      "pass2": {
+        "rule_id": "pin_dedupe_nms_v1",
+        "method": "greedy_iou_nms_keep_highest_confidence",
+        "iou_threshold": 0.42,
+        "raw_prediction_count": 6,
+        "deduped_prediction_count": 6,
+        "removed_count": 0
+      },
+      "iou_primary": 0.85,
+      "iou_secondary": 0.42,
+      "raw_prediction_count": 6,
+      "deduped_prediction_count": 6,
+      "removed_count_pass1": 0,
+      "removed_count_pass2": 0,
+      "removed_count_total": 0
+    }
+  }
+}
