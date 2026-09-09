@@ -10,7 +10,7 @@
 #   SKIP_GIT=1          — run detect/validate but skip commit/push and input cleanup
 #   SKIP_DELETE=1       — skip deleting ClickToRequest folder after success
 #   CTR_TEMPLATE_ID     — force bootstrap template show (YYYYMMDD only). Launchd pins
-#                         20260903 (user-include filter on reports + Fix boxes / Board Box Editor).
+#                         20260910 (verified visitor chrome; green-only clicks; no fuel/B-N UI).
 #   CTR_PRICING_RUN_ID  — Firebase test_run_id for the matching pricing harness
 #                         (test_PriceCollection_…_visual_baseline). When set, price overlay
 #                         points at that run. When unset, inherited template pricing ids are
@@ -195,7 +195,7 @@ discover_input_show() {
 
 find_highest_template_show() {
   # Bootstrap from a normal YYYYMMDD show only — never 2026D23 / Test overlays.
-  # Prefer CTR_TEMPLATE_ID when set (launchd pins 20260903 until you change it).
+  # Prefer CTR_TEMPLATE_ID when set (launchd pins 20260910).
   # Prefer git ls-tree (one call); fall back to disk if iCloud git flakes under launchd.
   local exclude="${SHOW_ID:-}"
   local best="" best_num=0 name num d
@@ -514,8 +514,8 @@ bootstrap_board_box_editor() {
 
   if [[ -f "${CTR_REPO}/BoardBoxEditor/${template_id}/index.html" ]]; then
     editor_src="${CTR_REPO}/BoardBoxEditor/${template_id}"
-  elif [[ -f "${CTR_REPO}/BoardBoxEditor/20260903/index.html" ]]; then
-    editor_src="${CTR_REPO}/BoardBoxEditor/20260903"
+  elif [[ -f "${CTR_REPO}/BoardBoxEditor/20260910/index.html" ]]; then
+    editor_src="${CTR_REPO}/BoardBoxEditor/20260910"
   else
     log "WARN: no BoardBoxEditor UI template — skipping editor bootstrap for ${show_id}"
     return 0

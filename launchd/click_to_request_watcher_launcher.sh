@@ -8,9 +8,9 @@ export CTR_MIRROR_DIR="FULL_PATH_TO_CTR_MIRROR_DIR"
 export CTR_REQUEST_ROOT="FULL_PATH_TO_CTR_REQUEST_ROOT"
 # Local-disk ClickToClaim clone for git commit/push (avoids iCloud .git deadlock).
 export CTR_PUBLISH_REPO="${CTR_PUBLISH_REPO:-${HOME}/Library/Application Support/FinsAndPins/ClickToClaimGit}"
-# Pin bootstrap template (never 2026D23 / special folders). 20260903 = user-include filter
-# on reports + Fix boxes / Board Box Editor, slim sticky header, dual pricing, etc.
-export CTR_TEMPLATE_ID="${CTR_TEMPLATE_ID:-20260903}"
+# Pin bootstrap template (never 2026D23 / special folders). 20260910 = verified CTR chrome
+# (no fuel/B-N limits UI, green-only visitor clicks, Connected sync, lite nudge).
+export CTR_TEMPLATE_ID="${CTR_TEMPLATE_ID:-20260910}"
 # Local Core ML model — Desktop/iCloud hits errno 11 under launchd.
 export RFDETR_COREML_MODEL_PATH="${RFDETR_COREML_MODEL_PATH:-${HOME}/Library/Application Support/FinsAndPins/models/RfDetrPinDetector.mlpackage}"
 # Set to 1 to log scan stats ~every 60s while troubleshooting.
