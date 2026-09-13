@@ -567,7 +567,9 @@ if [[ ! -f "${dst}/candidates.json" ]] || [[ ! -f "${dst}/testing_ui_visual_base
   exit 1
 fi
 
-if command -v python3 >/dev/null 2>&1; then
+# Review pages need PinPricing venv Python (3.10+). System /usr/bin/python3 is often 3.9
+# and fails on modern typing (dict | None) in generate_review_pages_enhanced.py.
+if [[ -x "$PY" ]]; then
   # Pin overlay on index.html navigates to new_ctp.html; build_testing_ui only writes
   # index + ui_data. Without these pages, GitHub Pages pin-clicks 404 for Lexi.
   # Prefer Application Support copy — reading the iCloud scripts/ path under launchd can
@@ -585,9 +587,9 @@ if command -v python3 >/dev/null 2>&1; then
     break
   done
   if [[ -n "$review_py" ]]; then
-    log "Generating ClickToPrice/Match review pages (${review_py})"
+    log "Generating ClickToPrice/Match review pages (${review_py}) with ${PY}"
     set -o pipefail
-    if ! python3 "$review_py" "$dst" 2>&1 | tee -a "$LOG_FILE"; then
+    if ! "$PY" "$review_py" "$dst" 2>&1 | tee -a "$LOG_FILE"; then
       set +o pipefail
       log "ERROR: generate_review_pages_enhanced.py failed — pin click would 404 on Pages"
       exit 1
@@ -600,7 +602,7 @@ if command -v python3 >/dev/null 2>&1; then
   if [[ ! -f "${dst}/testing_ui_visual_baseline/new_ctp.html" ]]; then
     log "WARN: new_ctp.html missing after generate — retrying once"
     set -o pipefail
-    python3 "$review_py" "$dst" 2>&1 | tee -a "$LOG_FILE" || true
+    "$PY" "$review_py" "$dst" 2>&1 | tee -a "$LOG_FILE" || true
     set +o pipefail
   fi
   if [[ ! -f "${dst}/testing_ui_visual_baseline/new_ctp.html" ]]; then
@@ -619,12 +621,15 @@ if command -v python3 >/dev/null 2>&1; then
   done
   if [[ -n "$patch_py" ]]; then
     log "Applying ClickToPrice scroll patch (${patch_py})"
-    if ! python3 "$patch_py" "${dst}/testing_ui_visual_baseline" 2>&1 | tee -a "$LOG_FILE"; then
+    if ! "$PY" "$patch_py" "${dst}/testing_ui_visual_baseline" 2>&1 | tee -a "$LOG_FILE"; then
       log "WARN: patch_harness_ctp_scroll.py failed — ClickToPrice list may jump to top after Use this"
     fi
   else
     log "WARN: missing patch_harness_ctp_scroll.py — re-run launchd/install_boards_inbox_launchagent.sh"
   fi
+else
+  log "ERROR: PinPricing venv python missing at ${PY} — cannot generate review pages"
+  exit 1
 fi
 
 # Copy the finished run from local work (or iCloud PREP fallback) into the publish clone.
