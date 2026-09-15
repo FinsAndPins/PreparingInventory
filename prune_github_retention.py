@@ -8,8 +8,9 @@ Design goals:
 - Never delete local files: uses `git rm -r --cached ...` (unpublish/untrack only).
 
 Policy (defaults):
-- Prune tracked `PriceCollection_YYYYMMDD_HHMM/` older than KEEP_DAYS (default 30),
-  but always keep at least KEEP_MIN newest collections (default 10).
+- Prune tracked `PriceCollection_YYYYMMDD_HHMM/` older than KEEP_DAYS (default 7),
+  but always keep at least KEEP_MIN newest collections (default 7).
+  (Pages soft limit ~1GB; large harness runs are often 700MB+, so keep few.)
 - Always prune tracked `PriceCollection_*__build_*/` folders (transient build artifacts).
 
 The script only operates on **git-tracked** top-level folders, because only tracked files affect GitHub size / Pages.
@@ -79,8 +80,8 @@ def append_gitignore(root: Path, rel_dir: str) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--keep-days", type=int, default=int(os.environ.get("RETENTION_KEEP_DAYS", "30")))
-    ap.add_argument("--keep-min", type=int, default=int(os.environ.get("RETENTION_KEEP_MIN", "10")))
+    ap.add_argument("--keep-days", type=int, default=int(os.environ.get("RETENTION_KEEP_DAYS", "7")))
+    ap.add_argument("--keep-min", type=int, default=int(os.environ.get("RETENTION_KEEP_MIN", "7")))
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 

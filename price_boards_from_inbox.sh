@@ -744,25 +744,29 @@ if [[ ! -d .git ]]; then
   exit 0
 fi
 
+# Retention policy: untrack older PriceCollection runs on GitHub Pages (keep on disk).
+# Defaults: keep 7 days / at least 7 newest (Pages soft limit ~1GB). Override with
+# RETENTION_KEEP_DAYS / RETENTION_KEEP_MIN. Prune tracked __build__ dirs immediately.
+if [[ -f "${PUBLISH_REPO}/prune_github_retention.py" ]] && command -v python3 >/dev/null 2>&1; then
+  log "Retention prune (GitHub Pages): keep_days=${RETENTION_KEEP_DAYS:-7} keep_min=${RETENTION_KEEP_MIN:-7}"
+  python3 "${PUBLISH_REPO}/prune_github_retention.py" \
+    --keep-days "${RETENTION_KEEP_DAYS:-7}" \
+    --keep-min "${RETENTION_KEEP_MIN:-7}" \
+    2>&1 | tee -a "$LOG_FILE" || log "WARN: retention prune failed — continuing without pruning"
+else
+  log "WARN: prune_github_retention.py missing or python3 unavailable — skipping retention prune"
+fi
+
+# Stage the new collection before rebuilding the Lexi index so the index only lists
+# what will remain on GitHub (tracked + newly staged), not every local disk folder.
+git_with_retry git add "$NEWNAME" BoardsToPrice
+
 if [[ -f "${PUBLISH_REPO}/update_pricing_index.py" ]] && command -v python3 >/dev/null 2>&1; then
   PREP_REPO_ROOT="$PUBLISH_REPO" python3 "${PUBLISH_REPO}/update_pricing_index.py" 2>&1 | tee -a "$LOG_FILE" || log "WARN: update_pricing_index.py failed — Lexi landing page list may be stale"
 else
   log "WARN: python3 or update_pricing_index.py missing — skipping pricing_index.json refresh"
 fi
 
-# Retention policy: keep recent PriceCollection runs on GitHub Pages (untrack older, keep on disk).
-# Defaults: keep 30 days, keep at least 10 newest, prune tracked __build__ dirs immediately.
-if [[ -f "${PUBLISH_REPO}/prune_github_retention.py" ]] && command -v python3 >/dev/null 2>&1; then
-  log "Retention prune (GitHub Pages): keep_days=${RETENTION_KEEP_DAYS:-30} keep_min=${RETENTION_KEEP_MIN:-10}"
-  python3 "${PUBLISH_REPO}/prune_github_retention.py" \
-    --keep-days "${RETENTION_KEEP_DAYS:-30}" \
-    --keep-min "${RETENTION_KEEP_MIN:-10}" \
-    2>&1 | tee -a "$LOG_FILE" || log "WARN: retention prune failed — continuing without pruning"
-else
-  log "WARN: prune_github_retention.py missing or python3 unavailable — skipping retention prune"
-fi
-
-git_with_retry git add "$NEWNAME" BoardsToPrice
 for f in pricing_index.json index.html update_pricing_index.py .gitignore; do
   [[ -f "$f" ]] && git_with_retry git add "$f"
 done

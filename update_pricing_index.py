@@ -2,8 +2,9 @@
 """
 Regenerate pricing_index.json for the GitHub Pages Lexi index (root index.html).
 
-Scans sibling folders PriceCollection_* that contain testing_ui_visual_baseline/index.html,
-sorted newest-first by embedded date in the folder name.
+Only lists PriceCollection_* folders that are in the git index (tracked or staged)
+and that still have testing_ui_visual_baseline/index.html on disk. This avoids
+linking collections that were untracked for retention while kept locally.
 
 Run from repo root:
   python3 update_pricing_index.py
@@ -15,6 +16,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -33,16 +35,42 @@ def format_label(folder: str) -> str:
     return f"{day.strftime('%b')} {day.day}, {day.year} · {h:02d}:{mi:02d}"
 
 
+def git_indexed_collections(root: Path) -> set[str]:
+    """Top-level PriceCollection_* dirs present in the git index (tracked or staged)."""
+    try:
+        out = subprocess.check_output(
+            ["git", "-C", str(root), "ls-files", "--", "PriceCollection_*/testing_ui_visual_baseline/index.html"],
+            text=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return set()
+    names: set[str] = set()
+    for line in out.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        top = line.split("/", 1)[0]
+        if NAME_RE.match(top):
+            names.add(top)
+    return names
+
+
 def main() -> int:
     root = Path(os.environ.get("PREP_REPO_ROOT", Path(__file__).resolve().parent))
+    indexed = git_indexed_collections(root)
+    # Fall back to disk scan only when not in a git checkout (manual/offline use).
+    if not indexed and not (root / ".git").exists():
+        indexed = {
+            p.name
+            for p in root.glob("PriceCollection_*")
+            if p.is_dir() and NAME_RE.match(p.name)
+        }
+
     rows: list[dict[str, str]] = []
-    for p in sorted(root.glob("PriceCollection_*"), key=lambda x: x.name, reverse=True):
-        if not p.is_dir():
-            continue
-        harness = p / "testing_ui_visual_baseline" / "index.html"
+    for folder in sorted(indexed, reverse=True):
+        harness = root / folder / "testing_ui_visual_baseline" / "index.html"
         if not harness.is_file():
             continue
-        folder = p.name
         rows.append(
             {
                 "folder": folder,
