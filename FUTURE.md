@@ -28,4 +28,21 @@ Exploratory backlog. Not committed to a ship date.
 
 ---
 
+## Board hints sidecar (`BOARD_HINTS.txt`) → automation (idea)
+
+**Today (2026-09-15):** For pricing drops, Steve can leave a `BOARD_HINTS.txt` on the `PriceCollection_*` folder (camera filename → staged `IMG_N` + series notes such as DSSH cuties, WDI adorbs, AP/PP, D23 2026). The overnight visual pipeline does **not** read this file. It is for humans and downstream jobs.
+
+**Useful now**
+- **Whatnot CSV titles:** use board/series hints when building titles so lots (e.g. D23 2026, DSSH cuties) stay consistent.
+- **AP/PP only:** optional Lexi keyword cue when Artist Proof / Proof Edition is easy to miss in a photo.
+
+**Not useful**
+- General Lexi ClickToPrice coaching (she can see the pins); do not build harness UI just to restate obvious board themes.
+
+**Future (most valuable eventually)**
+- Feed `BOARD_HINTS.txt` (or equivalent per-board tags) into automation: prefer keyword bins / search priors per board, and/or surface tags in harness only where they change Match behavior.
+- Keep a stable join: camera name → staged board → `crop_stem` so hints survive inbox rename.
+
+---
+
 _Add new bullets here as ideas come up._
