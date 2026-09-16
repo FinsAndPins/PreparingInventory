@@ -1,0 +1,143 @@
+{
+  "run_id": "PriceCollection_20260915_2019__build_13047",
+  "pipeline": "run_visual_baseline_pipeline_product_v1",
+  "generated_at": "2026-09-15T20:20:08",
+  "roboflow_cropping": {
+    "step": "roboflow_cropping",
+    "board_count": 2,
+    "total_wall_sec": 17.4846,
+    "boards": [
+      {
+        "board_file": "IMG_1.JPG",
+        "img_id": "1",
+        "pin_count": 8,
+        "roboflow_http_and_thumb_sec": 8.8843,
+        "extract_predictions_sec": 1.9e-05,
+        "dedupe_inject_sec": 4.6e-05,
+        "write_roboflow_json_sec": 0.000163,
+        "sort_and_local_crop_writes_sec": 0.0036,
+        "board_wall_sec": 8.8883
+      },
+      {
+        "board_file": "IMG_2.JPG",
+        "img_id": "2",
+        "pin_count": 12,
+        "roboflow_http_and_thumb_sec": 8.592,
+        "extract_predictions_sec": 2.5e-05,
+        "dedupe_inject_sec": 4.9e-05,
+        "write_roboflow_json_sec": 0.000164,
+        "sort_and_local_crop_writes_sec": 0.0039,
+        "board_wall_sec": 8.5963
+      }
+    ],
+    "notes": "Pin order in filenames (pin01, pin02, …) follows sort_predictions_reading_order (y then x) after optional IoU dedupe — same convention as build_testing_ui bbox index."
+  },
+  "product_v1": {
+    "crop_count": 20,
+    "approaches_loop_wall_sec": 27.1321,
+    "sum_ebay_search_sec": 20.6473,
+    "sum_phash_winner_sec": 6.2861,
+    "per_crop": [
+      {
+        "crop_filename": "img1_pin01.jpg",
+        "ebay_search_sec": 1.4363,
+        "phash_winner_sec": 0.4076
+      },
+      {
+        "crop_filename": "img1_pin02.jpg",
+        "ebay_search_sec": 0.9141,
+        "phash_winner_sec": 0.3847
+      },
+      {
+        "crop_filename": "img1_pin03.jpg",
+        "ebay_search_sec": 0.9362,
+        "phash_winner_sec": 0.26
+      },
+      {
+        "crop_filename": "img1_pin04.jpg",
+        "ebay_search_sec": 0.958,
+        "phash_winner_sec": 0.241
+      },
+      {
+        "crop_filename": "img1_pin05.jpg",
+        "ebay_search_sec": 0.8769,
+        "phash_winner_sec": 0.2097
+      },
+      {
+        "crop_filename": "img1_pin06.jpg",
+        "ebay_search_sec": 1.0087,
+        "phash_winner_sec": 0.3727
+      },
+      {
+        "crop_filename": "img1_pin07.jpg",
+        "ebay_search_sec": 0.948,
+        "phash_winner_sec": 0.263
+      },
+      {
+        "crop_filename": "img1_pin08.jpg",
+        "ebay_search_sec": 0.887,
+        "phash_winner_sec": 1.0962
+      },
+      {
+        "crop_filename": "img2_pin01.jpg",
+        "ebay_search_sec": 1.0138,
+        "phash_winner_sec": 0.214
+      },
+      {
+        "crop_filename": "img2_pin02.jpg",
+        "ebay_search_sec": 0.9033,
+        "phash_winner_sec": 0.2865
+      },
+      {
+        "crop_filename": "img2_pin03.jpg",
+        "ebay_search_sec": 1.04,
+        "phash_winner_sec": 0.1062
+      },
+      {
+        "crop_filename": "img2_pin04.jpg",
+        "ebay_search_sec": 0.9064,
+        "phash_winner_sec": 0.1478
+      },
+      {
+        "crop_filename": "img2_pin05.jpg",
+        "ebay_search_sec": 0.9664,
+        "phash_winner_sec": 0.2474
+      },
+      {
+        "crop_filename": "img2_pin06.jpg",
+        "ebay_search_sec": 0.9706,
+        "phash_winner_sec": 0.2547
+      },
+      {
+        "crop_filename": "img2_pin07.jpg",
+        "ebay_search_sec": 1.2735,
+        "phash_winner_sec": 0.3626
+      },
+      {
+        "crop_filename": "img2_pin08.jpg",
+        "ebay_search_sec": 1.1851,
+        "phash_winner_sec": 0.3214
+      },
+      {
+        "crop_filename": "img2_pin09.jpg",
+        "ebay_search_sec": 0.9812,
+        "phash_winner_sec": 0.2152
+      },
+      {
+        "crop_filename": "img2_pin10.jpg",
+        "ebay_search_sec": 1.005,
+        "phash_winner_sec": 0.0939
+      },
+      {
+        "crop_filename": "img2_pin11.jpg",
+        "ebay_search_sec": 1.4269,
+        "phash_winner_sec": 0.4134
+      },
+      {
+        "crop_filename": "img2_pin12.jpg",
+        "ebay_search_sec": 1.0099,
+        "phash_winner_sec": 0.3881
+      }
+    ]
+  }
+}
