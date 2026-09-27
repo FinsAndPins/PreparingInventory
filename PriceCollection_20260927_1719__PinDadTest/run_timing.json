@@ -1,0 +1,453 @@
+{
+  "run_id": "PriceCollection_20260927_1719__PinDadTest__build_named",
+  "pipeline": "run_visual_baseline_pipeline_product_v1",
+  "generated_at": "2026-09-27T17:22:00",
+  "roboflow_cropping": {
+    "step": "roboflow_cropping",
+    "board_count": 2,
+    "total_wall_sec": 18.9529,
+    "boards": [
+      {
+        "board_file": "IMG_0205.JPG",
+        "img_id": "0205",
+        "pin_count": 20,
+        "roboflow_http_and_thumb_sec": 9.7062,
+        "extract_predictions_sec": 1.6e-05,
+        "dedupe_inject_sec": 0.000118,
+        "write_roboflow_json_sec": 0.000184,
+        "sort_and_local_crop_writes_sec": 0.0598,
+        "board_wall_sec": 9.7666
+      },
+      {
+        "board_file": "IMG_0206.JPG",
+        "img_id": "0206",
+        "pin_count": 62,
+        "roboflow_http_and_thumb_sec": 9.1374,
+        "extract_predictions_sec": 3.1e-05,
+        "dedupe_inject_sec": 0.000477,
+        "write_roboflow_json_sec": 0.000265,
+        "sort_and_local_crop_writes_sec": 0.0478,
+        "board_wall_sec": 9.1863
+      }
+    ],
+    "notes": "Pin order in filenames (pin01, pin02, …) follows sort_predictions_reading_order (y then x) after optional IoU dedupe — same convention as build_testing_ui bbox index."
+  },
+  "product_v1": {
+    "crop_count": 82,
+    "approaches_loop_wall_sec": 104.3582,
+    "sum_ebay_search_sec": 79.2564,
+    "sum_phash_winner_sec": 23.4756,
+    "per_crop": [
+      {
+        "crop_filename": "img0205_pin01.jpg",
+        "ebay_search_sec": 1.4118,
+        "phash_winner_sec": 0.4056
+      },
+      {
+        "crop_filename": "img0205_pin02.jpg",
+        "ebay_search_sec": 0.8719,
+        "phash_winner_sec": 0.0921
+      },
+      {
+        "crop_filename": "img0205_pin03.jpg",
+        "ebay_search_sec": 0.9434,
+        "phash_winner_sec": 0.1027
+      },
+      {
+        "crop_filename": "img0205_pin04.jpg",
+        "ebay_search_sec": 0.9832,
+        "phash_winner_sec": 0.4392
+      },
+      {
+        "crop_filename": "img0205_pin05.jpg",
+        "ebay_search_sec": 1.2874,
+        "phash_winner_sec": 0.1859
+      },
+      {
+        "crop_filename": "img0205_pin06.jpg",
+        "ebay_search_sec": 1.0143,
+        "phash_winner_sec": 0.3922
+      },
+      {
+        "crop_filename": "img0205_pin07.jpg",
+        "ebay_search_sec": 1.1181,
+        "phash_winner_sec": 0.4175
+      },
+      {
+        "crop_filename": "img0205_pin08.jpg",
+        "ebay_search_sec": 0.9929,
+        "phash_winner_sec": 0.1069
+      },
+      {
+        "crop_filename": "img0205_pin09.jpg",
+        "ebay_search_sec": 0.9934,
+        "phash_winner_sec": 0.3506
+      },
+      {
+        "crop_filename": "img0205_pin10.jpg",
+        "ebay_search_sec": 0.9764,
+        "phash_winner_sec": 0.1424
+      },
+      {
+        "crop_filename": "img0205_pin11.jpg",
+        "ebay_search_sec": 1.2097,
+        "phash_winner_sec": 0.2934
+      },
+      {
+        "crop_filename": "img0205_pin12.jpg",
+        "ebay_search_sec": 1.1185,
+        "phash_winner_sec": 0.2885
+      },
+      {
+        "crop_filename": "img0205_pin13.jpg",
+        "ebay_search_sec": 0.8993,
+        "phash_winner_sec": 0.2537
+      },
+      {
+        "crop_filename": "img0205_pin14.jpg",
+        "ebay_search_sec": 0.9288,
+        "phash_winner_sec": 0.1525
+      },
+      {
+        "crop_filename": "img0205_pin15.jpg",
+        "ebay_search_sec": 1.0304,
+        "phash_winner_sec": 0.2721
+      },
+      {
+        "crop_filename": "img0205_pin16.jpg",
+        "ebay_search_sec": 0.9144,
+        "phash_winner_sec": 0.4323
+      },
+      {
+        "crop_filename": "img0205_pin17.jpg",
+        "ebay_search_sec": 0.95,
+        "phash_winner_sec": 0.2882
+      },
+      {
+        "crop_filename": "img0205_pin18.jpg",
+        "ebay_search_sec": 0.8056,
+        "phash_winner_sec": 0.3086
+      },
+      {
+        "crop_filename": "img0205_pin19.jpg",
+        "ebay_search_sec": 0.893,
+        "phash_winner_sec": 0.4176
+      },
+      {
+        "crop_filename": "img0205_pin20.jpg",
+        "ebay_search_sec": 0.8976,
+        "phash_winner_sec": 0.2884
+      },
+      {
+        "crop_filename": "img0206_pin01.jpg",
+        "ebay_search_sec": 1.0317,
+        "phash_winner_sec": 0.1227
+      },
+      {
+        "crop_filename": "img0206_pin02.jpg",
+        "ebay_search_sec": 1.0945,
+        "phash_winner_sec": 0.2794
+      },
+      {
+        "crop_filename": "img0206_pin03.jpg",
+        "ebay_search_sec": 1.2377,
+        "phash_winner_sec": 0.1082
+      },
+      {
+        "crop_filename": "img0206_pin04.jpg",
+        "ebay_search_sec": 0.8988,
+        "phash_winner_sec": 0.511
+      },
+      {
+        "crop_filename": "img0206_pin05.jpg",
+        "ebay_search_sec": 0.922,
+        "phash_winner_sec": 0.292
+      },
+      {
+        "crop_filename": "img0206_pin06.jpg",
+        "ebay_search_sec": 0.9944,
+        "phash_winner_sec": 0.2249
+      },
+      {
+        "crop_filename": "img0206_pin07.jpg",
+        "ebay_search_sec": 1.0118,
+        "phash_winner_sec": 0.2246
+      },
+      {
+        "crop_filename": "img0206_pin08.jpg",
+        "ebay_search_sec": 0.8681,
+        "phash_winner_sec": 0.3053
+      },
+      {
+        "crop_filename": "img0206_pin09.jpg",
+        "ebay_search_sec": 0.8644,
+        "phash_winner_sec": 0.2501
+      },
+      {
+        "crop_filename": "img0206_pin10.jpg",
+        "ebay_search_sec": 0.902,
+        "phash_winner_sec": 0.2457
+      },
+      {
+        "crop_filename": "img0206_pin11.jpg",
+        "ebay_search_sec": 1.1403,
+        "phash_winner_sec": 0.336
+      },
+      {
+        "crop_filename": "img0206_pin12.jpg",
+        "ebay_search_sec": 0.8635,
+        "phash_winner_sec": 0.4504
+      },
+      {
+        "crop_filename": "img0206_pin13.jpg",
+        "ebay_search_sec": 1.0037,
+        "phash_winner_sec": 0.1072
+      },
+      {
+        "crop_filename": "img0206_pin14.jpg",
+        "ebay_search_sec": 0.9118,
+        "phash_winner_sec": 0.5094
+      },
+      {
+        "crop_filename": "img0206_pin15.jpg",
+        "ebay_search_sec": 0.9321,
+        "phash_winner_sec": 0.4741
+      },
+      {
+        "crop_filename": "img0206_pin16.jpg",
+        "ebay_search_sec": 0.9099,
+        "phash_winner_sec": 0.1373
+      },
+      {
+        "crop_filename": "img0206_pin17.jpg",
+        "ebay_search_sec": 1.0516,
+        "phash_winner_sec": 0.1022
+      },
+      {
+        "crop_filename": "img0206_pin18.jpg",
+        "ebay_search_sec": 0.86,
+        "phash_winner_sec": 0.3282
+      },
+      {
+        "crop_filename": "img0206_pin19.jpg",
+        "ebay_search_sec": 1.2657,
+        "phash_winner_sec": 0.2499
+      },
+      {
+        "crop_filename": "img0206_pin20.jpg",
+        "ebay_search_sec": 0.8668,
+        "phash_winner_sec": 0.1748
+      },
+      {
+        "crop_filename": "img0206_pin21.jpg",
+        "ebay_search_sec": 0.9247,
+        "phash_winner_sec": 0.315
+      },
+      {
+        "crop_filename": "img0206_pin22.jpg",
+        "ebay_search_sec": 0.9057,
+        "phash_winner_sec": 0.3121
+      },
+      {
+        "crop_filename": "img0206_pin23.jpg",
+        "ebay_search_sec": 0.9162,
+        "phash_winner_sec": 0.2281
+      },
+      {
+        "crop_filename": "img0206_pin24.jpg",
+        "ebay_search_sec": 1.0707,
+        "phash_winner_sec": 0.1684
+      },
+      {
+        "crop_filename": "img0206_pin25.jpg",
+        "ebay_search_sec": 1.0443,
+        "phash_winner_sec": 0.2309
+      },
+      {
+        "crop_filename": "img0206_pin26.jpg",
+        "ebay_search_sec": 0.9372,
+        "phash_winner_sec": 0.3691
+      },
+      {
+        "crop_filename": "img0206_pin27.jpg",
+        "ebay_search_sec": 0.9909,
+        "phash_winner_sec": 0.419
+      },
+      {
+        "crop_filename": "img0206_pin28.jpg",
+        "ebay_search_sec": 0.8472,
+        "phash_winner_sec": 0.3406
+      },
+      {
+        "crop_filename": "img0206_pin29.jpg",
+        "ebay_search_sec": 1.0274,
+        "phash_winner_sec": 0.4099
+      },
+      {
+        "crop_filename": "img0206_pin30.jpg",
+        "ebay_search_sec": 0.9026,
+        "phash_winner_sec": 0.408
+      },
+      {
+        "crop_filename": "img0206_pin31.jpg",
+        "ebay_search_sec": 0.8844,
+        "phash_winner_sec": 0.2655
+      },
+      {
+        "crop_filename": "img0206_pin32.jpg",
+        "ebay_search_sec": 1.0416,
+        "phash_winner_sec": 0.2265
+      },
+      {
+        "crop_filename": "img0206_pin33.jpg",
+        "ebay_search_sec": 0.9344,
+        "phash_winner_sec": 0.3235
+      },
+      {
+        "crop_filename": "img0206_pin34.jpg",
+        "ebay_search_sec": 0.865,
+        "phash_winner_sec": 0.3594
+      },
+      {
+        "crop_filename": "img0206_pin35.jpg",
+        "ebay_search_sec": 1.2684,
+        "phash_winner_sec": 0.2971
+      },
+      {
+        "crop_filename": "img0206_pin36.jpg",
+        "ebay_search_sec": 0.9387,
+        "phash_winner_sec": 0.3479
+      },
+      {
+        "crop_filename": "img0206_pin37.jpg",
+        "ebay_search_sec": 1.1659,
+        "phash_winner_sec": 0.2794
+      },
+      {
+        "crop_filename": "img0206_pin38.jpg",
+        "ebay_search_sec": 0.9121,
+        "phash_winner_sec": 0.4043
+      },
+      {
+        "crop_filename": "img0206_pin39.jpg",
+        "ebay_search_sec": 0.9153,
+        "phash_winner_sec": 0.3654
+      },
+      {
+        "crop_filename": "img0206_pin40.jpg",
+        "ebay_search_sec": 0.8539,
+        "phash_winner_sec": 0.3414
+      },
+      {
+        "crop_filename": "img0206_pin41.jpg",
+        "ebay_search_sec": 0.8892,
+        "phash_winner_sec": 0.2076
+      },
+      {
+        "crop_filename": "img0206_pin42.jpg",
+        "ebay_search_sec": 0.9462,
+        "phash_winner_sec": 0.336
+      },
+      {
+        "crop_filename": "img0206_pin43.jpg",
+        "ebay_search_sec": 1.0473,
+        "phash_winner_sec": 0.1091
+      },
+      {
+        "crop_filename": "img0206_pin44.jpg",
+        "ebay_search_sec": 0.8802,
+        "phash_winner_sec": 0.3541
+      },
+      {
+        "crop_filename": "img0206_pin45.jpg",
+        "ebay_search_sec": 0.8541,
+        "phash_winner_sec": 0.2713
+      },
+      {
+        "crop_filename": "img0206_pin46.jpg",
+        "ebay_search_sec": 0.884,
+        "phash_winner_sec": 0.2848
+      },
+      {
+        "crop_filename": "img0206_pin47.jpg",
+        "ebay_search_sec": 0.9741,
+        "phash_winner_sec": 0.2901
+      },
+      {
+        "crop_filename": "img0206_pin48.jpg",
+        "ebay_search_sec": 0.9256,
+        "phash_winner_sec": 0.2906
+      },
+      {
+        "crop_filename": "img0206_pin49.jpg",
+        "ebay_search_sec": 0.9064,
+        "phash_winner_sec": 0.2419
+      },
+      {
+        "crop_filename": "img0206_pin50.jpg",
+        "ebay_search_sec": 0.9084,
+        "phash_winner_sec": 0.2343
+      },
+      {
+        "crop_filename": "img0206_pin51.jpg",
+        "ebay_search_sec": 0.8807,
+        "phash_winner_sec": 0.1213
+      },
+      {
+        "crop_filename": "img0206_pin52.jpg",
+        "ebay_search_sec": 0.9547,
+        "phash_winner_sec": 0.257
+      },
+      {
+        "crop_filename": "img0206_pin53.jpg",
+        "ebay_search_sec": 0.9667,
+        "phash_winner_sec": 0.1096
+      },
+      {
+        "crop_filename": "img0206_pin54.jpg",
+        "ebay_search_sec": 0.9954,
+        "phash_winner_sec": 0.4716
+      },
+      {
+        "crop_filename": "img0206_pin55.jpg",
+        "ebay_search_sec": 0.8419,
+        "phash_winner_sec": 0.2581
+      },
+      {
+        "crop_filename": "img0206_pin56.jpg",
+        "ebay_search_sec": 0.9482,
+        "phash_winner_sec": 0.167
+      },
+      {
+        "crop_filename": "img0206_pin57.jpg",
+        "ebay_search_sec": 0.8288,
+        "phash_winner_sec": 0.2675
+      },
+      {
+        "crop_filename": "img0206_pin58.jpg",
+        "ebay_search_sec": 0.979,
+        "phash_winner_sec": 0.2794
+      },
+      {
+        "crop_filename": "img0206_pin59.jpg",
+        "ebay_search_sec": 0.8594,
+        "phash_winner_sec": 0.5338
+      },
+      {
+        "crop_filename": "img0206_pin60.jpg",
+        "ebay_search_sec": 0.9689,
+        "phash_winner_sec": 0.2862
+      },
+      {
+        "crop_filename": "img0206_pin61.jpg",
+        "ebay_search_sec": 0.8667,
+        "phash_winner_sec": 0.3275
+      },
+      {
+        "crop_filename": "img0206_pin62.jpg",
+        "ebay_search_sec": 0.733,
+        "phash_winner_sec": 0.3015
+      }
+    ]
+  }
+}
