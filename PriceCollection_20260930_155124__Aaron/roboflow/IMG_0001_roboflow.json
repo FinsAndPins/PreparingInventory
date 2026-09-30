@@ -1,0 +1,164 @@
+{
+  "predictions": [
+    {
+      "x": 81.62713623046875,
+      "y": 325.453125,
+      "width": 163.2542724609375,
+      "height": 228.93017578125,
+      "confidence": 0.9447912573814392,
+      "class": "pin"
+    },
+    {
+      "x": 1054.65234375,
+      "y": 1208.935546875,
+      "width": 224.5166015625,
+      "height": 246.0087890625,
+      "confidence": 0.9429286122322083,
+      "class": "pin"
+    },
+    {
+      "x": 1029.322265625,
+      "y": 685.0634765625,
+      "width": 173.47265625,
+      "height": 241.01953125,
+      "confidence": 0.9427180886268616,
+      "class": "pin"
+    },
+    {
+      "x": 829.751953125,
+      "y": 1194.3515625,
+      "width": 216.0732421875,
+      "height": 240.06005859375,
+      "confidence": 0.9398029446601868,
+      "class": "pin"
+    },
+    {
+      "x": 420.6328125,
+      "y": 672.0146484375,
+      "width": 261.744140625,
+      "height": 367.86181640625,
+      "confidence": 0.9396923184394836,
+      "class": "pin"
+    },
+    {
+      "x": 825.146484375,
+      "y": 645.533203125,
+      "width": 182.68359375,
+      "height": 192.85400390625,
+      "confidence": 0.936051607131958,
+      "class": "pin"
+    },
+    {
+      "x": 481.6552734375,
+      "y": 944.12109375,
+      "width": 161.38330078125,
+      "height": 174.336181640625,
+      "confidence": 0.9342753291130066,
+      "class": "pin"
+    },
+    {
+      "x": 583.7431640625,
+      "y": 1191.28125,
+      "width": 225.66796875,
+      "height": 226.8193359375,
+      "confidence": 0.9320833086967468,
+      "class": "pin"
+    },
+    {
+      "x": 858.919921875,
+      "y": 908.8125,
+      "width": 141.906005859375,
+      "height": 236.4140625,
+      "confidence": 0.9319595694541931,
+      "class": "pin"
+    },
+    {
+      "x": 265.1982421875,
+      "y": 335.62353515625,
+      "width": 183.739013671875,
+      "height": 234.87890625,
+      "confidence": 0.9263036847114563,
+      "class": "pin"
+    },
+    {
+      "x": 647.8359375,
+      "y": 934.142578125,
+      "width": 141.330322265625,
+      "height": 236.60595703125,
+      "confidence": 0.9263036847114563,
+      "class": "pin"
+    },
+    {
+      "x": 638.625,
+      "y": 694.658203125,
+      "width": 161.863037109375,
+      "height": 151.78857421875,
+      "confidence": 0.9227612018585205,
+      "class": "pin"
+    },
+    {
+      "x": 315.8583984375,
+      "y": 951.796875,
+      "width": 155.722412109375,
+      "height": 178.749755859375,
+      "confidence": 0.9222025275230408,
+      "class": "pin"
+    },
+    {
+      "x": 1038.533203125,
+      "y": 920.326171875,
+      "width": 138.068115234375,
+      "height": 177.50244140625,
+      "confidence": 0.9162596464157104,
+      "class": "pin"
+    },
+    {
+      "x": 845.103515625,
+      "y": 297.8203125,
+      "width": 270.1875,
+      "height": 364.9833984375,
+      "confidence": 0.8875949382781982,
+      "class": "pin"
+    },
+    {
+      "x": 591.802734375,
+      "y": 306.6474609375,
+      "width": 257.5224609375,
+      "height": 353.66162109375,
+      "confidence": 0.8872045874595642,
+      "class": "pin"
+    }
+  ],
+  "image": {
+    "width": 1180,
+    "height": 1572
+  },
+  "_pin_tools_meta": {
+    "pin_dedupe": {
+      "rule_id": "pin_dedupe_nms_v2",
+      "pass1": {
+        "rule_id": "pin_dedupe_nms_v1",
+        "method": "greedy_iou_nms_keep_highest_confidence",
+        "iou_threshold": 0.85,
+        "raw_prediction_count": 16,
+        "deduped_prediction_count": 16,
+        "removed_count": 0
+      },
+      "pass2": {
+        "rule_id": "pin_dedupe_nms_v1",
+        "method": "greedy_iou_nms_keep_highest_confidence",
+        "iou_threshold": 0.42,
+        "raw_prediction_count": 16,
+        "deduped_prediction_count": 16,
+        "removed_count": 0
+      },
+      "iou_primary": 0.85,
+      "iou_secondary": 0.42,
+      "raw_prediction_count": 16,
+      "deduped_prediction_count": 16,
+      "removed_count_pass1": 0,
+      "removed_count_pass2": 0,
+      "removed_count_total": 0
+    }
+  }
+}
