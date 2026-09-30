@@ -34,8 +34,14 @@ class TrackedDir:
     date: datetime | None
 
 
-COL_RE = re.compile(r"^PriceCollection_(\d{8})_(\d{4})$")
-BUILD_RE = re.compile(r"^PriceCollection_\d{8}_\d{4}__build_\d+$")
+# Boards inbox: PriceCollection_YYYYMMDD_HHMM
+# Named Collections: PriceCollection_YYYYMMDD_HHMMSS__Slug
+COL_RE = re.compile(r"^PriceCollection_(\d{8})_(\d{4,6})(?:__([A-Za-z0-9._-]+))?$")
+# Boards build artifact: …__build_12345
+# Named build artifact: …__Slug__build_named (or similar)
+BUILD_RE = re.compile(
+    r"^PriceCollection_\d{8}_\d{4,6}(?:__[A-Za-z0-9._-]+)?__build_[A-Za-z0-9._-]+$"
+)
 
 
 def sh(cmd: list[str]) -> str:
@@ -53,6 +59,7 @@ def tracked_top_level_dirs() -> list[str]:
 
 
 def parse_tracked_dir(name: str) -> TrackedDir | None:
+    # Builds first: named finals also contain "__" and must not be misclassified.
     if BUILD_RE.match(name):
         return TrackedDir(name=name, kind="build", date=None)
     m = COL_RE.match(name)
