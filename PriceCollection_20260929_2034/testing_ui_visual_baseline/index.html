@@ -1030,7 +1030,9 @@
         }
         const br = document.createElement("div");
         br.className = "boardHdrR";
-        let brLine = `IMG ${b.board_num} | ${b.pin_count} pins | ${moneyListRaw(sumRawListPrices(b.pins))}`;
+        // CTR board # = order in this harness (same as ClickToClaim/20261001 boards 1–28).
+        const ctrBoard = bi + 1;
+        let brLine = `Board ${ctrBoard} · IMG ${b.board_num} | ${b.pin_count} pins | ${moneyListRaw(sumRawListPrices(b.pins))}`;
         if (window.ctpWhatnotPreview) {
           brLine += ` · W ${moneyListRaw(sumWhatnotLadderPrices(b.pins))}`;
         }
