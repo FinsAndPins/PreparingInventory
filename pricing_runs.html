@@ -89,6 +89,12 @@
       gap: 12px;
       min-width: 10rem;
     }
+    .name-cell a:has(.thumb),
+    .name-cell a:has(.thumb-ph) {
+      display: inline-flex;
+      flex: 0 0 auto;
+      line-height: 0;
+    }
     .thumb {
       width: 52px;
       height: 52px;
@@ -263,15 +269,20 @@
     }
 
     function nameCell(run) {
+      const href =
+        '<a href="' +
+        escapeAttr(run.overlay_url) +
+        '" target="_blank" rel="noopener">';
       const thumb = run.thumb_url
-        ? '<img class="thumb" src="' + escapeAttr(run.thumb_url) + '" alt="" loading="lazy" />'
-        : '<span class="thumb-ph" aria-hidden="true"></span>';
+        ? href +
+          '<img class="thumb" src="' +
+          escapeAttr(run.thumb_url) +
+          '" alt="" loading="lazy" /></a>'
+        : href + '<span class="thumb-ph" aria-hidden="true"></span></a>';
       return (
         '<div class="name-cell">' +
         thumb +
-        '<a href="' +
-        escapeAttr(run.overlay_url) +
-        '" target="_blank" rel="noopener">' +
+        href +
         escapeHtml(run.label || run.folder) +
         "</a></div>"
       );
