@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pricing runs (Lexi)</title>
+  <style>
+    :root {
+      --bg: #f7f4ef;
+      --ink: #1c1917;
+      --muted: #78716c;
+      --line: #e7e0d5;
+      --panel: #fffdf9;
+      --link: #0f5c4c;
+      --link-hover: #0a3f35;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 28px 18px 56px;
+      font-family: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+      background:
+        radial-gradient(1200px 500px at 10% -10%, #efe6d8 0%, transparent 55%),
+        radial-gradient(900px 420px at 100% 0%, #e4efe9 0%, transparent 50%),
+        var(--bg);
+      color: var(--ink);
+      line-height: 1.4;
+    }
+    h1 {
+      font-size: clamp(1.6rem, 3vw, 2.1rem);
+      margin: 0 0 6px;
+      letter-spacing: -0.02em;
+      font-weight: 700;
+    }
+    .intro {
+      margin: 0 0 18px;
+      color: var(--muted);
+      max-width: 46rem;
+      font-size: 0.98rem;
+    }
+    #status {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-bottom: 12px;
+      min-height: 1.2em;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+    }
+    .wrap {
+      max-width: 920px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      overflow: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+      font-size: 0.95rem;
+    }
+    th, td {
+      text-align: left;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      white-space: nowrap;
+    }
+    th {
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      background: #faf7f2;
+      position: sticky;
+      top: 0;
+    }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    th.num { text-align: right; }
+    tr:last-child td { border-bottom: none; }
+    a {
+      color: var(--link);
+      text-decoration: none;
+      font-weight: 650;
+    }
+    a:hover { color: var(--link-hover); text-decoration: underline; }
+    footer {
+      margin-top: 18px;
+      font-size: 0.82rem;
+      color: var(--muted);
+      max-width: 920px;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+    }
+  </style>
+</head>
+<body>
+  <h1>Pricing runs</h1>
+  <p class="intro">
+    Last 30 days of published BoardsToPrice and CollectionsToPrice runs. Folder name opens the Overlay.
+    Dollar totals use live Match / ClickToPrice / manual prices (NaP and unmatched no-price pins excluded).
+  </p>
+  <div id="status">Loading…</div>
+  <div class="wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Folder Name</th>
+          <th class="num">$ value</th>
+          <th class="num"># of pins</th>
+          <th class="num">$ / pin</th>
+          <th class="num">50% of value</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+  <footer>
+    Index: <code>pricing_runs_index.json</code>
+    · refreshed by sidecar Action after each publish and on a ~20 min schedule
+    · <a href="./">classic list</a>
+  </footer>
+  <script>
+    const rowsEl = document.getElementById("rows");
+    const statusEl = document.getElementById("status");
+    const FB_BASE =
+      "https://fins-and-pins-click-to-claim-default-rtdb.firebaseio.com/pin_pricing_tests";
+
+    function fail(msg) {
+      statusEl.textContent = msg;
+      rowsEl.innerHTML = "";
+    }
+
+    function escapeHtml(s) {
+      return String(s || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+    function escapeAttr(s) {
+      return escapeHtml(s).replace(/"/g, "&quot;");
+    }
+
+    function money(n) {
+      if (n == null || !isFinite(Number(n))) return "—";
+      return "$" + Number(n).toLocaleString("en-US", {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      });
+    }
+
+    function positive(n) {
+      const v = Number(n);
+      return isFinite(v) && v > 0 ? v : null;
+    }
+
+    function pinPrice(pin) {
+      if (!pin || typeof pin !== "object") return null;
+      if (pin.not_a_pin === true || pin.match_status === "not_a_pin") return null;
+      const status = String(pin.match_status || "").toLowerCase();
+      const display = positive(pin.display_price);
+      const manual = positive(pin.manual_price);
+      const sc = pin.selected_candidate;
+      let scPrice = null;
+      if (sc && typeof sc === "object") {
+        scPrice = positive(sc.price != null ? sc.price : sc.total_price);
+      }
+      if ((status === "match" || status === "priced") && display != null) return display;
+      if (manual != null) return manual;
+      if (sc && typeof sc === "object" && display != null) return display;
+      if (scPrice != null) return scPrice;
+      return null;
+    }
+
+    function summarize(pins) {
+      if (!pins || typeof pins !== "object") {
+        return { value: null, count: null, per: null, half: null };
+      }
+      let total = 0;
+      let count = 0;
+      for (const pin of Object.values(pins)) {
+        const p = pinPrice(pin);
+        if (p == null) continue;
+        total += p;
+        count += 1;
+      }
+      total = Math.round(total * 100) / 100;
+      const per = count ? Math.round((total / count) * 100) / 100 : 0;
+      const half = Math.round(total * 50) / 100;
+      return { value: total, count, per, half };
+    }
+
+    async function liveTotals(run) {
+      if (!run.test_run_id) {
+        return {
+          value: run.value_usd,
+          count: run.pin_count,
+          per: run.per_pin_usd,
+          half: run.half_value_usd,
+        };
+      }
+      const approach = run.approach_id || "visual_baseline";
+      const url = FB_BASE + "/" + encodeURIComponent(run.test_run_id) + "/" + encodeURIComponent(approach) + "/pins.json";
+      try {
+        const r = await fetch(url, { cache: "no-store" });
+        if (!r.ok) throw new Error("fb " + r.status);
+        const pins = await r.json();
+        return summarize(pins || {});
+      } catch (_) {
+        return {
+          value: run.value_usd,
+          count: run.pin_count,
+          per: run.per_pin_usd,
+          half: run.half_value_usd,
+        };
+      }
+    }
+
+    function renderRow(run, totals) {
+      return (
+        "<tr><td><a href=\"" +
+        escapeAttr(run.overlay_url) +
+        "\" target=\"_blank\" rel=\"noopener\">" +
+        escapeHtml(run.label || run.folder) +
+        "</a></td>" +
+        '<td class="num">' + money(totals.value) + "</td>" +
+        '<td class="num">' + (totals.count == null ? "—" : String(totals.count)) + "</td>" +
+        '<td class="num">' + money(totals.per) + "</td>" +
+        '<td class="num">' + money(totals.half) + "</td></tr>"
+      );
+    }
+
+    fetch("./pricing_runs_index.json", { cache: "no-store" })
+      .then((r) => {
+        if (!r.ok) throw new Error("Could not load pricing_runs_index.json (" + r.status + ")");
+        return r.json();
+      })
+      .then(async (data) => {
+        const list = (data && data.runs) || [];
+        if (!list.length) {
+          fail("No successful pricing runs in the last " + (data.keep_days || 30) + " days.");
+          return;
+        }
+        statusEl.textContent =
+          list.length +
+          " run(s) · index updated " +
+          (data.updated_iso || "") +
+          " · loading live $…";
+        rowsEl.innerHTML = list
+          .map((run) =>
+            renderRow(run, {
+              value: run.value_usd,
+              count: run.pin_count,
+              per: run.per_pin_usd,
+              half: run.half_value_usd,
+            })
+          )
+          .join("");
+
+        const live = await Promise.all(list.map(liveTotals));
+        rowsEl.innerHTML = list.map((run, i) => renderRow(run, live[i])).join("");
+        statusEl.textContent =
+          list.length + " run(s) · index updated " + (data.updated_iso || "") + " · live $ from Firebase";
+      })
+      .catch((e) => fail(String(e.message || e)));
+  </script>
+</body>
+</html>

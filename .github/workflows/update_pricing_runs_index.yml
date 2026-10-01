@@ -1,0 +1,50 @@
+name: Update pricing runs index
+
+# Sidecar only: reads published PriceCollection_* outputs + Firebase prices,
+# writes pricing_runs_index.json. Does not call or modify inbox watchers.
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "PriceCollection_*/**"
+      - "update_pricing_runs_index.py"
+      - ".github/workflows/update_pricing_runs_index.yml"
+  schedule:
+    # Refresh $ totals as Lexi prices (~20 min). New runs also refresh on PriceCollection push.
+    - cron: "*/20 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-pricing-runs-index
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Regenerate pricing_runs_index.json
+        env:
+          PRICING_RUNS_KEEP_DAYS: "30"
+        run: python3 update_pricing_runs_index.py
+
+      - name: Commit if changed
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pricing_runs_index.json pricing_runs.html update_pricing_runs_index.py
+          if git diff --cached --quiet; then
+            echo "No index changes."
+            exit 0
+          fi
+          git commit -m "Refresh pricing_runs_index.json (sidecar)"
+          git push

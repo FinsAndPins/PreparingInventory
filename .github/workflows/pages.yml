@@ -26,6 +26,8 @@ jobs:
             .nojekyll
             index.html
             pricing_index.json
+            pricing_runs.html
+            pricing_runs_index.json
           sparse-checkout-cone-mode: false
 
       - name: Sparse-add every PriceCollection / EventHarness testing UI
@@ -70,7 +72,7 @@ jobs:
       - name: Assemble site artifact
         run: |
           mkdir -p _site
-          cp index.html pricing_index.json .nojekyll _site/
+          cp index.html pricing_index.json pricing_runs.html pricing_runs_index.json .nojekyll _site/
           for tv in title_validator*; do
             if [ -d "$tv" ]; then
               cp -R "$tv" "_site/"
