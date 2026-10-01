@@ -35,7 +35,7 @@
     .intro {
       margin: 0 0 18px;
       color: var(--muted);
-      max-width: 46rem;
+      max-width: 52rem;
       font-size: 0.98rem;
     }
     #status {
@@ -46,7 +46,7 @@
       font-family: ui-sans-serif, system-ui, sans-serif;
     }
     .wrap {
-      max-width: 920px;
+      max-width: 1040px;
       border: 1px solid var(--line);
       background: var(--panel);
       overflow: auto;
@@ -59,9 +59,10 @@
     }
     th, td {
       text-align: left;
-      padding: 12px 14px;
+      padding: 10px 14px;
       border-bottom: 1px solid var(--line);
       white-space: nowrap;
+      vertical-align: middle;
     }
     th {
       color: var(--muted);
@@ -82,11 +83,33 @@
       font-weight: 650;
     }
     a:hover { color: var(--link-hover); text-decoration: underline; }
+    .name-cell {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 10rem;
+    }
+    .thumb {
+      width: 52px;
+      height: 52px;
+      object-fit: cover;
+      border-radius: 6px;
+      background: #ebe4d8;
+      flex: 0 0 52px;
+      display: block;
+    }
+    .thumb-ph {
+      width: 52px;
+      height: 52px;
+      border-radius: 6px;
+      background: #ebe4d8;
+      flex: 0 0 52px;
+    }
     footer {
       margin-top: 18px;
       font-size: 0.82rem;
       color: var(--muted);
-      max-width: 920px;
+      max-width: 1040px;
       font-family: ui-sans-serif, system-ui, sans-serif;
     }
   </style>
@@ -94,15 +117,17 @@
 <body>
   <h1>Pricing runs</h1>
   <p class="intro">
-    Last 30 days of published BoardsToPrice and CollectionsToPrice runs. Folder name opens the Overlay.
+    Last 30 days of published BoardsToPrice and CollectionsToPrice runs. Name opens the Overlay.
     Dollar totals use live Match / ClickToPrice / manual prices (NaP and unmatched no-price pins excluded).
+    % complete = (Match + NaP + Priced) / Total pins.
   </p>
   <div id="status">Loading…</div>
   <div class="wrap">
     <table>
       <thead>
         <tr>
-          <th>Folder Name</th>
+          <th>Name</th>
+          <th class="num">% complete</th>
           <th class="num">$ value</th>
           <th class="num"># of pins</th>
           <th class="num">$ / pin</th>
@@ -146,6 +171,12 @@
       });
     }
 
+    function pct(n) {
+      if (n == null || !isFinite(Number(n))) return "—";
+      const v = Number(n);
+      return (Number.isInteger(v) ? String(v) : v.toFixed(1)) + "%";
+    }
+
     function positive(n) {
       const v = Number(n);
       return isFinite(v) && v > 0 ? v : null;
@@ -171,11 +202,25 @@
 
     function summarize(pins) {
       if (!pins || typeof pins !== "object") {
-        return { value: null, count: null, per: null, half: null };
+        return {
+          value: null, count: null, per: null, half: null,
+          pctComplete: null,
+        };
       }
       let total = 0;
       let count = 0;
+      let pinsTotal = 0;
+      let match = 0;
+      let priced = 0;
+      let nap = 0;
       for (const pin of Object.values(pins)) {
+        if (!pin || typeof pin !== "object") continue;
+        pinsTotal += 1;
+        const status = String(pin.match_status || "").toLowerCase();
+        const isNap = pin.not_a_pin === true || status === "not_a_pin";
+        if (isNap) nap += 1;
+        else if (status === "match") match += 1;
+        else if (status === "priced") priced += 1;
         const p = pinPrice(pin);
         if (p == null) continue;
         total += p;
@@ -184,7 +229,9 @@
       total = Math.round(total * 100) / 100;
       const per = count ? Math.round((total / count) * 100) / 100 : 0;
       const half = Math.round(total * 50) / 100;
-      return { value: total, count, per, half };
+      const done = match + nap + priced;
+      const pctComplete = pinsTotal ? Math.round((1000 * done) / pinsTotal) / 10 : 0;
+      return { value: total, count, per, half, pctComplete };
     }
 
     async function liveTotals(run) {
@@ -194,6 +241,7 @@
           count: run.pin_count,
           per: run.per_pin_usd,
           half: run.half_value_usd,
+          pctComplete: run.pct_complete,
         };
       }
       const approach = run.approach_id || "visual_baseline";
@@ -209,17 +257,32 @@
           count: run.pin_count,
           per: run.per_pin_usd,
           half: run.half_value_usd,
+          pctComplete: run.pct_complete,
         };
       }
     }
 
+    function nameCell(run) {
+      const thumb = run.thumb_url
+        ? '<img class="thumb" src="' + escapeAttr(run.thumb_url) + '" alt="" loading="lazy" />'
+        : '<span class="thumb-ph" aria-hidden="true"></span>';
+      return (
+        '<div class="name-cell">' +
+        thumb +
+        '<a href="' +
+        escapeAttr(run.overlay_url) +
+        '" target="_blank" rel="noopener">' +
+        escapeHtml(run.label || run.folder) +
+        "</a></div>"
+      );
+    }
+
     function renderRow(run, totals) {
       return (
-        "<tr><td><a href=\"" +
-        escapeAttr(run.overlay_url) +
-        "\" target=\"_blank\" rel=\"noopener\">" +
-        escapeHtml(run.label || run.folder) +
-        "</a></td>" +
+        "<tr><td>" +
+        nameCell(run) +
+        "</td>" +
+        '<td class="num">' + pct(totals.pctComplete) + "</td>" +
         '<td class="num">' + money(totals.value) + "</td>" +
         '<td class="num">' + (totals.count == null ? "—" : String(totals.count)) + "</td>" +
         '<td class="num">' + money(totals.per) + "</td>" +
@@ -250,6 +313,7 @@
               count: run.pin_count,
               per: run.per_pin_usd,
               half: run.half_value_usd,
+              pctComplete: run.pct_complete,
             })
           )
           .join("");

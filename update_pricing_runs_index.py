@@ -160,19 +160,36 @@ def overlay_url(root: Path, folder: str) -> str:
     return f"{BASE_URL}/{folder}/testing_ui_visual_baseline/index.html"
 
 
-def load_ui_meta(root: Path, folder: str) -> tuple[str | None, str]:
+def first_board_thumb_url(folder: str, ui: dict[str, Any] | None) -> str | None:
+    """Public Pages URL for the first board photo in the pricing harness."""
+    if not isinstance(ui, dict):
+        return None
+    boards = ui.get("boards")
+    if not isinstance(boards, list) or not boards:
+        return None
+    image_rel = boards[0].get("image_rel") if isinstance(boards[0], dict) else None
+    if not image_rel or not isinstance(image_rel, str):
+        return None
+    rel = image_rel.strip().lstrip("./")
+    if not rel:
+        return None
+    return f"{BASE_URL}/{folder}/testing_ui_visual_baseline/{rel}"
+
+
+def load_ui_meta(root: Path, folder: str) -> tuple[str | None, str, str | None]:
     path = root / folder / "testing_ui_visual_baseline" / "ui_data.json"
     if not path.is_file():
-        return None, "visual_baseline"
+        return None, "visual_baseline", None
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        return None, "visual_baseline"
-    run_id = data.get("test_run_id") if isinstance(data, dict) else None
-    approach = "visual_baseline"
-    if isinstance(data, dict) and data.get("approach_id"):
-        approach = str(data["approach_id"])
-    return (str(run_id) if run_id else None), approach
+        return None, "visual_baseline", None
+    if not isinstance(data, dict):
+        return None, "visual_baseline", None
+    run_id = data.get("test_run_id")
+    approach = str(data.get("approach_id") or "visual_baseline")
+    thumb = first_board_thumb_url(folder, data)
+    return (str(run_id) if run_id else None), approach, thumb
 
 
 def fetch_pins(run_id: str, approach: str) -> dict[str, Any] | None:
@@ -248,10 +265,30 @@ def summarize_pins(pins: dict[str, Any] | None) -> dict[str, Any]:
             "pin_count": None,
             "per_pin_usd": None,
             "half_value_usd": None,
+            "pct_complete": None,
+            "pins_total": None,
+            "pins_match": None,
+            "pins_priced": None,
+            "pins_nap": None,
             "price_source": "firebase_error",
         }
     prices: list[float] = []
+    pins_total = 0
+    pins_match = 0
+    pins_priced = 0
+    pins_nap = 0
     for pin in pins.values():
+        if not isinstance(pin, dict):
+            continue
+        pins_total += 1
+        status = str(pin.get("match_status") or "").strip().lower()
+        is_nap = pin.get("not_a_pin") is True or status == "not_a_pin"
+        if is_nap:
+            pins_nap += 1
+        elif status == "match":
+            pins_match += 1
+        elif status == "priced":
+            pins_priced += 1
         p = pin_included_price(pin)
         if p is not None:
             prices.append(p)
@@ -259,11 +296,20 @@ def summarize_pins(pins: dict[str, Any] | None) -> dict[str, Any]:
     n = len(prices)
     per = round(total / n, 2) if n else 0.0
     half = round(0.5 * total, 2)
+    # % pricing complete: (Match + NaP + Priced) / Total.
+    # Priced included so CTP/manual finishes count (user's match+NaP core, plus priced).
+    done = pins_match + pins_nap + pins_priced
+    pct = round(100.0 * done / pins_total, 1) if pins_total else 0.0
     return {
         "value_usd": total,
         "pin_count": n,
         "per_pin_usd": per,
         "half_value_usd": half,
+        "pct_complete": pct,
+        "pins_total": pins_total,
+        "pins_match": pins_match,
+        "pins_priced": pins_priced,
+        "pins_nap": pins_nap,
         "price_source": "firebase",
     }
 
@@ -306,7 +352,7 @@ def main() -> int:
 
         label = folder_label(root, folder)
         ov = overlay_url(root, folder)
-        run_id, approach = load_ui_meta(root, folder)
+        run_id, approach, thumb = load_ui_meta(root, folder)
         money = (
             summarize_pins(fetch_pins(run_id, approach))
             if run_id
@@ -315,6 +361,11 @@ def main() -> int:
                 "pin_count": None,
                 "per_pin_usd": None,
                 "half_value_usd": None,
+                "pct_complete": None,
+                "pins_total": None,
+                "pins_match": None,
+                "pins_priced": None,
+                "pins_nap": None,
                 "price_source": "missing_test_run_id",
             }
         )
@@ -327,6 +378,7 @@ def main() -> int:
                 "label": label,
                 "sort_key": sort_key,
                 "overlay_url": ov,
+                "thumb_url": thumb,
                 "test_run_id": run_id,
                 "approach_id": approach,
                 "has_share_lexi": share_ok,
