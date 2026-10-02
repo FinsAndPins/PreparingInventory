@@ -1,0 +1,84 @@
+{
+  "predictions": [
+    {
+      "x": 144.5361328125,
+      "y": 393.9237823486328,
+      "width": 256.1220703125,
+      "height": 234.49221801757812,
+      "confidence": 0.9590010046958923,
+      "class": "pin"
+    },
+    {
+      "x": 119.4697265625,
+      "y": 135.7802152633667,
+      "width": 221.958984375,
+      "height": 240.9609317779541,
+      "confidence": 0.9443824291229248,
+      "class": "pin"
+    },
+    {
+      "x": 616.1484680175781,
+      "y": 399.9882507324219,
+      "width": 252.88763427734375,
+      "height": 228.02349853515625,
+      "confidence": 0.9443824291229248,
+      "class": "pin"
+    },
+    {
+      "x": 644.44921875,
+      "y": 113.4240493774414,
+      "width": 214.8837890625,
+      "height": 226.8480987548828,
+      "confidence": 0.9377830028533936,
+      "class": "pin"
+    },
+    {
+      "x": 387.1142578125,
+      "y": 115.16108202934265,
+      "width": 254.302734375,
+      "height": 216.50098657608032,
+      "confidence": 0.9246877431869507,
+      "class": "pin"
+    },
+    {
+      "x": 372.9638977050781,
+      "y": 370.8788604736328,
+      "width": 227.61920166015625,
+      "height": 200.83450317382812,
+      "confidence": 0.9235923886299133,
+      "class": "pin"
+    }
+  ],
+  "image": {
+    "width": 828,
+    "height": 514
+  },
+  "_pin_tools_meta": {
+    "pin_dedupe": {
+      "rule_id": "pin_dedupe_nms_v2",
+      "pass1": {
+        "rule_id": "pin_dedupe_nms_v1",
+        "method": "greedy_iou_nms_keep_highest_confidence",
+        "iou_threshold": 0.85,
+        "raw_prediction_count": 6,
+        "deduped_prediction_count": 6,
+        "removed_count": 0
+      },
+      "pass2": {
+        "rule_id": "pin_dedupe_nms_v1",
+        "method": "greedy_iou_nms_keep_highest_confidence",
+        "iou_threshold": 0.42,
+        "raw_prediction_count": 6,
+        "deduped_prediction_count": 6,
+        "removed_count": 0
+      },
+      "iou_primary": 0.85,
+      "iou_secondary": 0.42,
+      "raw_prediction_count": 6,
+      "deduped_prediction_count": 6,
+      "removed_count_pass1": 0,
+      "removed_count_pass2": 0,
+      "removed_count_total": 0
+    }
+  }
+}
