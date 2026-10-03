@@ -1,0 +1,35 @@
+ClickToPrice visual_baseline harness
+=====================================
+
+This folder contains index.html + ui_data.json + assets/.
+
+DEFAULT (embedded data in index.html):
+  You can open index.html directly (file://) or use HTTP below.
+
+Firebase:
+  Default: stable path pin_pricing_tests/test_<run-folder>_visual_baseline/…/pins (writes only).
+  Collaboration: add --firebase-collab — load on open + realtime child listeners (Lexi + Steve, same run).
+  Isolated: --firebase-local-only — timestamped test_run_id, no load/listeners.
+
+eBay keyword search (Browse API via proxy):
+  Default proxy is Render-hosted and may take 1–2 min to wake; first keyword search waits up to 2 min.
+  Override URL when rebuilding: --ebay-proxy-base https://your-host.example.com
+  Or in the browser: ?proxy=dev (http://127.0.0.1:8091) or ?proxy=https://…
+
+HTTP (same for both builds; use on iPad):
+  1) cd to THIS folder (testing_ui_visual_baseline), then:
+       python3 -m http.server 8765
+
+  2) Open:
+       http://127.0.0.1:8765/index.html
+
+     On iPad: http://<your-mac-lan-ip>:8765/index.html
+
+If the server runs from the parent runs/<id>/ folder, open:
+     http://127.0.0.1:8765/testing_ui_visual_baseline/index.html
+
+Do NOT open http://.../ alone from parent — that is the study index.html.
+
+Thin JSON-only build:
+  python3 build_testing_ui.py --run-dir runs/<id> --board-photos-dir "…" --split-bundle
+
