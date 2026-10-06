@@ -25,22 +25,34 @@ else
   git -C "$CTR_PUBLISH" pull --ff-only origin main >/dev/null 2>&1 || true
 fi
 
-CTR_SCRIPTS=(
+CTR_SCRIPTS_REQUIRED=(
   watch_click_to_request.sh
   prepare_click_to_claim.sh
   detect_boards_rfdetr_for_ctr.py
   validate_ctr_boards.py
-  patch_ctr_show_slug.py
-  wire_ctr_pricing_overlay.sh
   lexi_send_imessage.py
 )
+# Optional helpers: keep existing BIN copy if absent from PREP (legacy files not always on main).
+CTR_SCRIPTS_OPTIONAL=(
+  patch_ctr_show_slug.py
+  wire_ctr_pricing_overlay.sh
+)
 
-for f in "${CTR_SCRIPTS[@]}"; do
+for f in "${CTR_SCRIPTS_REQUIRED[@]}"; do
   if [[ ! -f "${PREP}/${f}" ]]; then
     echo "ERROR: missing ${PREP}/${f}"
     exit 1
   fi
   cp -f "${PREP}/${f}" "$BIN/"
+done
+for f in "${CTR_SCRIPTS_OPTIONAL[@]}"; do
+  if [[ -f "${PREP}/${f}" ]]; then
+    cp -f "${PREP}/${f}" "$BIN/"
+  elif [[ -f "${BIN}/${f}" ]]; then
+    echo "WARN: ${f} missing under PREP — keeping existing BIN copy."
+  else
+    echo "WARN: ${f} missing under PREP and BIN — CTR may fail if prepare calls it."
+  fi
 done
 chmod +x "${BIN}/watch_click_to_request.sh" "${BIN}/prepare_click_to_claim.sh" "${BIN}/lexi_send_imessage.py"
 
