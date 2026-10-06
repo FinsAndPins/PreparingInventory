@@ -10,7 +10,7 @@
 #   SKIP_GIT=1          — run detect/validate but skip commit/push and input cleanup
 #   SKIP_DELETE=1       — skip deleting ClickToRequest folder after success
 #   CTR_TEMPLATE_ID     — force bootstrap template show (YYYYMMDD only). Launchd pins
-#                         20260910 (verified visitor chrome; green-only clicks; no fuel/B-N UI).
+#                         20261005 (Lexi Canva bg, frosted title strips, tallies, new text colors).
 #   CTR_PRICING_RUN_ID  — Firebase test_run_id for the matching pricing harness
 #                         (test_PriceCollection_…_visual_baseline). When set, price overlay
 #                         points at that run. When unset, inherited template pricing ids are
@@ -195,7 +195,7 @@ discover_input_show() {
 
 find_highest_template_show() {
   # Bootstrap from a normal YYYYMMDD show only — never 2026D23 / Test overlays.
-  # Prefer CTR_TEMPLATE_ID when set (launchd pins 20260910).
+  # Prefer CTR_TEMPLATE_ID when set (launchd pins 20261005).
   # Prefer git ls-tree (one call); fall back to disk if iCloud git flakes under launchd.
   local exclude="${SHOW_ID:-}"
   local best="" best_num=0 name num d
@@ -493,6 +493,12 @@ bootstrap_show() {
       log "Copied companion page: ${opt}"
     fi
   done
+  # Page background asset (20261005+ Canva). Required when index.html references it.
+  if [[ -f "${template_dir}/ctr-bg-canva.jpg" ]]; then
+    copy_with_retry "${template_dir}/ctr-bg-canva.jpg" "${target_dir}/ctr-bg-canva.jpg" \
+      || die "Failed copying ctr-bg-canva.jpg from template ${template_id}"
+    log "Copied page background: ctr-bg-canva.jpg"
+  fi
   copy_icons_with_retry "$template_dir" "$target_dir" \
     || die "Failed copying icons from template ${template_id}"
   copy_js_with_retry "$template_dir" "$target_dir" \
@@ -514,6 +520,8 @@ bootstrap_board_box_editor() {
 
   if [[ -f "${CTR_REPO}/BoardBoxEditor/${template_id}/index.html" ]]; then
     editor_src="${CTR_REPO}/BoardBoxEditor/${template_id}"
+  elif [[ -f "${CTR_REPO}/BoardBoxEditor/20261005/index.html" ]]; then
+    editor_src="${CTR_REPO}/BoardBoxEditor/20261005"
   elif [[ -f "${CTR_REPO}/BoardBoxEditor/20260910/index.html" ]]; then
     editor_src="${CTR_REPO}/BoardBoxEditor/20260910"
   else
