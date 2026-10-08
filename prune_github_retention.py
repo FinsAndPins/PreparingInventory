@@ -88,13 +88,22 @@ def append_gitignore(root: Path, rel_dir: str) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--keep-days", type=int, default=int(os.environ.get("RETENTION_KEEP_DAYS", "7")))
+    ap.add_argument(
+        "--named-keep-days",
+        type=int,
+        default=int(os.environ.get("RETENTION_NAMED_KEEP_DAYS", "21")),
+        help="Keep named PriceCollection_*__Slug folders this many days (Lexi often revisits).",
+    )
     ap.add_argument("--keep-min", type=int, default=int(os.environ.get("RETENTION_KEEP_MIN", "7")))
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
     keep_days = max(0, int(args.keep_days))
+    named_keep_days = max(0, int(args.named_keep_days))
     keep_min = max(0, int(args.keep_min))
-    cutoff = datetime.now() - timedelta(days=keep_days)
+    now = datetime.now()
+    cutoff = now - timedelta(days=keep_days)
+    named_cutoff = now - timedelta(days=named_keep_days)
 
     root = git_root()
     os.chdir(root)
@@ -113,16 +122,23 @@ def main() -> int:
     # Always prune tracked build artifacts
     prune.extend([t.name for t in builds])
 
-    # Prune old collections, respecting keep-min
+    # Prune old collections, respecting keep-min.
+    # Named (__Slug) folders use a longer window so Lexi does not lose CTM mid-work.
     for t in cols:
         if t.name in keep_names:
             continue
-        if t.date and t.date < cutoff:
+        is_named = "__" in t.name
+        col_cutoff = named_cutoff if is_named else cutoff
+        if t.date and t.date < col_cutoff:
             prune.append(t.name)
 
     prune = sorted(set(prune))
 
-    print(f"[retention] keep_days={keep_days} cutoff={cutoff:%Y-%m-%d} keep_min={keep_min}")
+    print(
+        f"[retention] keep_days={keep_days} cutoff={cutoff:%Y-%m-%d} "
+        f"named_keep_days={named_keep_days} named_cutoff={named_cutoff:%Y-%m-%d} "
+        f"keep_min={keep_min}"
+    )
     print(f"[retention] tracked collections={len(cols)} tracked build dirs={len(builds)}")
     print(f"[retention] prune count={len(prune)}")
     for n in prune[:40]:
