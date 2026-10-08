@@ -8,9 +8,11 @@ Design goals:
 - Never delete local files: uses `git rm -r --cached ...` (unpublish/untrack only).
 
 Policy (defaults):
-- Prune tracked `PriceCollection_YYYYMMDD_HHMM/` older than KEEP_DAYS (default 7),
+- Prune tracked Boards `PriceCollection_YYYYMMDD_HHMM/` older than KEEP_DAYS (default 7),
   but always keep at least KEEP_MIN newest collections (default 7).
   (Pages soft limit ~1GB; large harness runs are often 700MB+, so keep few.)
+- Named `PriceCollection_*__Slug` folders use NAMED_KEEP_DAYS (default 21) so Lexi
+  can revisit mid-work CTMs without a restore.
 - Always prune tracked `PriceCollection_*__build_*/` folders (transient build artifacts).
 
 The script only operates on **git-tracked** top-level folders, because only tracked files affect GitHub size / Pages.
