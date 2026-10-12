@@ -1066,4 +1066,98 @@ if (!window.__hamBound) {
 }
 </script>
 
+
+<script>
+(function(){
+  if (window.__fpScriptABound) return;
+  window.__fpScriptABound = true;
+  const SHOW = '20261012';
+  const DB = (typeof _DB_BASE === 'string' && _DB_BASE)
+    ? _DB_BASE
+    : 'https://fins-and-pins-click-to-claim-default-rtdb.firebaseio.com';
+  const URL = DB.replace(/\/+$/, '') + '/showConfig/' + SHOW + '/whatnotScriptARequest.json';
+
+  function toast(msg, color) {
+    if (typeof _fbToast === 'function') { _fbToast(msg, color || '#1a5e1a'); return; }
+    alert(msg);
+  }
+
+  async function refreshLabel(btn) {
+    try {
+      const r = await fetch(URL + '?_=' + Date.now());
+      const v = r.ok ? await r.json() : null;
+      if (!v) return;
+      if (v.status === 'running') btn.textContent = 'Script A running…';
+      else if (v.status === 'done') btn.textContent = 'Script A done';
+      else if (v.status === 'error') btn.textContent = 'Script A failed';
+      else if (v.status === 'requested') btn.textContent = 'Script A queued…';
+    } catch (e) {}
+  }
+
+  async function requestScriptA() {
+    const ok = window.confirm(
+      'Build the Whatnot CSV (Script A) now?\n\n' +
+      'Only after Match, ClickToPrice, and any manual prices are done.\n' +
+      'Leftover Monday pins are not re-detected.\n\n' +
+      'The Mac watcher will run characters and text you when the CSV is ready.'
+    );
+    if (!ok) return;
+    const body = JSON.stringify({
+      status: 'requested',
+      requestedAt: new Date().toISOString(),
+      show_id: SHOW,
+      source: 'ctm_button',
+    });
+    try {
+      const r = await fetch(URL, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: body,
+      });
+      if (!r.ok) { toast('Script A request failed (' + r.status + ')', '#8b0000'); return; }
+      toast('Script A requested — Mac is running it', '#1a5e1a');
+      document.querySelectorAll('[data-fp-script-a-btn]').forEach(function(b){
+        b.textContent = 'Script A queued…';
+      });
+    } catch (e) {
+      toast('Script A request failed — network', '#8b0000');
+    }
+  }
+
+  function makeBtn() {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('data-fp-script-a-btn', '1');
+    b.textContent = 'Whatnot Script A';
+    b.style.cssText = 'background:#5a2a6a;color:#f3d4ff;border:none;border-radius:8px;'
+      + 'font-size:13px;font-weight:700;padding:8px 10px;cursor:pointer;flex-shrink:0';
+    b.addEventListener('click', requestScriptA);
+    refreshLabel(b);
+    setInterval(function(){ refreshLabel(b); }, 15000);
+    return b;
+  }
+
+  const hdr = document.querySelector('.hdr-row');
+  if (hdr) {
+    const ham = document.getElementById('ham-btn');
+    hdr.insertBefore(makeBtn(), ham || null);
+  }
+  const nav = document.getElementById('nav-menu');
+  if (nav) {
+    const a = document.createElement('a');
+    a.href = '#';
+    a.setAttribute('data-fp-script-a-btn', '1');
+    a.textContent = 'Whatnot Script A';
+    a.addEventListener('click', function(e){ e.preventDefault(); requestScriptA(); });
+    nav.appendChild(a);
+  }
+  const done = document.getElementById('done-banner');
+  if (done) {
+    const b = makeBtn();
+    b.style.marginTop = '12px';
+    done.appendChild(b);
+  }
+})();
+</script>
+
 </body></html>
