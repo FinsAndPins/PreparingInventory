@@ -10,7 +10,9 @@
 #   SKIP_GIT=1          — run detect/validate but skip commit/push and input cleanup
 #   SKIP_DELETE=1       — skip deleting ClickToRequest folder after success
 #   CTR_TEMPLATE_ID     — force bootstrap template show (YYYYMMDD only). Launchd pins
-#                         20261005 (Lexi Canva bg, frosted title strips, tallies, new text colors).
+#                         20261012 (search bar, Canva page, Reports show/hide).
+#                         HTML is read from ClickToClaimGit when that show is there,
+#                         then from the iCloud ClickToClaim checkout.
 #   CTR_PRICING_RUN_ID  — Firebase test_run_id for the matching pricing harness
 #                         (test_PriceCollection_…_visual_baseline). When set, price overlay
 #                         points at that run. When unset, inherited template pricing ids are
@@ -195,8 +197,8 @@ discover_input_show() {
 
 find_highest_template_show() {
   # Bootstrap from a normal YYYYMMDD show only — never 2026D23 / Test overlays.
-  # Prefer CTR_TEMPLATE_ID when set (launchd pins 20261005).
-  # Prefer git ls-tree (one call); fall back to disk if iCloud git flakes under launchd.
+  # Prefer CTR_TEMPLATE_ID when set (launchd pins 20261012).
+  # Template HTML may live in the local publish clone even when the iCloud checkout is behind.
   local exclude="${SHOW_ID:-}"
   local best="" best_num=0 name num d
 
@@ -204,8 +206,8 @@ find_highest_template_show() {
     if ! is_yyyymmdd "$CTR_TEMPLATE_ID"; then
       die "CTR_TEMPLATE_ID must be YYYYMMDD (got '${CTR_TEMPLATE_ID}' — refusing non-dated templates like D23)"
     fi
-    if [[ ! -f "${CTR_REPO}/${CTR_TEMPLATE_ID}/index.html" ]]; then
-      die "CTR_TEMPLATE_ID=${CTR_TEMPLATE_ID} has no index.html under ${CTR_REPO}"
+    if ! template_html_dir "$CTR_TEMPLATE_ID" >/dev/null; then
+      die "CTR_TEMPLATE_ID=${CTR_TEMPLATE_ID} has no index.html under ${CTR_PUBLISH_REPO} or ${CTR_REPO}"
     fi
     echo "$CTR_TEMPLATE_ID"
     return 0
@@ -251,6 +253,20 @@ find_highest_template_show() {
     die "No dated YYYYMMDD show template with index.html found under ${CTR_REPO}/ (refusing non-dated folders like 2026D23)"
   fi
   echo "$best"
+}
+
+# Where to read template HTML. Publish clone (ClickToClaimGit) wins when it has the show.
+template_html_dir() {
+  local id="$1"
+  if [[ -f "${CTR_PUBLISH_REPO}/${id}/index.html" ]]; then
+    echo "${CTR_PUBLISH_REPO}/${id}"
+    return 0
+  fi
+  if [[ -f "${CTR_REPO}/${id}/index.html" ]]; then
+    echo "${CTR_REPO}/${id}"
+    return 0
+  fi
+  return 1
 }
 
 has_board_outputs() {
@@ -474,11 +490,13 @@ patch_show_html() {
 bootstrap_show() {
   local template_id="$1"
   local show_id="$2"
-  local template_dir="${CTR_REPO}/${template_id}"
-  local target_dir="${CTR_REPO}/${show_id}"
+  local template_dir target_dir="${CTR_REPO}/${show_id}"
   local opt
 
-  log "Bootstrapping ${show_id} from template ${template_id}"
+  template_dir="$(template_html_dir "$template_id")" \
+    || die "No index.html for template ${template_id} under ${CTR_PUBLISH_REPO} or ${CTR_REPO}"
+
+  log "Bootstrapping ${show_id} from template ${template_id} (${template_dir})"
   mkdir -p "${target_dir}/icons"
   # Prefer plain cp + retries over rsync: rsync mmap often deadlocks under iCloud.
   copy_with_retry "${template_dir}/index.html" "${target_dir}/index.html" \
@@ -518,7 +536,9 @@ bootstrap_board_box_editor() {
   local boards_src="${CTR_REPO}/${show_id}/boards"
   local f
 
-  if [[ -f "${CTR_REPO}/BoardBoxEditor/${template_id}/index.html" ]]; then
+  if [[ -f "${CTR_PUBLISH_REPO}/BoardBoxEditor/${template_id}/index.html" ]]; then
+    editor_src="${CTR_PUBLISH_REPO}/BoardBoxEditor/${template_id}"
+  elif [[ -f "${CTR_REPO}/BoardBoxEditor/${template_id}/index.html" ]]; then
     editor_src="${CTR_REPO}/BoardBoxEditor/${template_id}"
   elif [[ -f "${CTR_REPO}/BoardBoxEditor/20261005/index.html" ]]; then
     editor_src="${CTR_REPO}/BoardBoxEditor/20261005"
@@ -846,7 +866,9 @@ if has_board_outputs "$TARGET_DIR"; then
 fi
 
 TEMPLATE_ID="$(find_highest_template_show)"
-log "Template show: ${TEMPLATE_ID}"
+TEMPLATE_DIR="$(template_html_dir "$TEMPLATE_ID")" \
+  || die "Template ${TEMPLATE_ID} disappeared after lookup"
+log "Template show: ${TEMPLATE_ID} (${TEMPLATE_DIR})"
 
 if [[ "${DRY_RUN:-0}" == "1" ]]; then
   if [[ "$RECOVERY_COMMIT_ONLY" == "1" ]]; then
@@ -865,9 +887,9 @@ if [[ "$RECOVERY_COMMIT_ONLY" != "1" ]]; then
     bootstrap_show "$TEMPLATE_ID" "$SHOW_ID"
   else
     log "Show folder exists without board outputs — finishing bootstrap assets and patching Firebase slug"
-    copy_icons_with_retry "${CTR_REPO}/${TEMPLATE_ID}" "$TARGET_DIR" \
+    copy_icons_with_retry "$TEMPLATE_DIR" "$TARGET_DIR" \
       || die "Failed copying icons while finishing incomplete bootstrap"
-    ensure_collection_detection_promo_asset "$TARGET_DIR" "${CTR_REPO}/${TEMPLATE_ID}" \
+    ensure_collection_detection_promo_asset "$TARGET_DIR" "$TEMPLATE_DIR" \
       || die "Failed placing collection-detection-app-square.png"
     patch_show_html "$TARGET_DIR" "$SHOW_ID"
   fi
@@ -896,13 +918,13 @@ else
 fi
 
 if [[ "${SKIP_GIT:-0}" == "1" ]]; then
-  ensure_collection_detection_promo_asset "$TARGET_DIR" "${CTR_REPO}/${TEMPLATE_ID}" || true
+  ensure_collection_detection_promo_asset "$TARGET_DIR" "$TEMPLATE_DIR" || true
   log "SKIP_GIT=1 — skipping commit/push and input cleanup"
   log "Done (local only). Open after manual push: ${LIVE_URL}"
   exit 0
 fi
 
-ensure_collection_detection_promo_asset "$TARGET_DIR" "${CTR_REPO}/${TEMPLATE_ID}" \
+ensure_collection_detection_promo_asset "$TARGET_DIR" "$TEMPLATE_DIR" \
   || die "collection-detection-app-square.png could not be placed in ${TARGET_DIR}"
 
 commit_and_push "$SHOW_ID"
