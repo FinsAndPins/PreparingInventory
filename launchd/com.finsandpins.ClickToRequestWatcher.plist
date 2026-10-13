@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+	</dict>
+	<key>KeepAlive</key>
+	<true/>
+	<key>Label</key>
+	<string>com.finsandpins.ClickToRequestWatcher</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/bash</string>
+		<string>FULL_PATH_TO_LAUNCHER_SCRIPT</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>FULL_PATH_TO_LOCAL_CTR_WATCHER_BIN/_logs/launchd_ctr_watcher.err.log</string>
+	<key>StandardOutPath</key>
+	<string>FULL_PATH_TO_LOCAL_CTR_WATCHER_BIN/_logs/launchd_ctr_watcher.log</string>
+	<key>ThrottleInterval</key>
+	<integer>30</integer>
+	<key>WorkingDirectory</key>
+	<string>FULL_PATH_TO_USER_HOME</string>
+</dict>
+</plist>

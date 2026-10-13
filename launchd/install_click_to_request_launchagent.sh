@@ -82,13 +82,31 @@ sed -e "s|FULL_PATH_TO_PREPARING_INVENTORY|${PREP}|g" \
     -e "s|FULL_PATH_TO_LOCAL_CTR_WATCHER_BIN|${BIN}|g" \
     -e "s|FULL_PATH_TO_CTR_MIRROR_DIR|${CTR_MIRROR}|g" \
     -e "s|FULL_PATH_TO_CTR_REQUEST_ROOT|${CTR_REQUEST}|g" \
-  "${PREP}/launchd/click_to_request_watcher_launcher.sh" > "$LAUNCHER"
+  "${PREP}/launchd/click_to_request_watcher_launcher.sh" > "${LAUNCHER}.tmp"
+if [[ ! -s "${LAUNCHER}.tmp" ]]; then
+  rm -f "${LAUNCHER}.tmp"
+  echo "ERROR: launcher render was empty. Left the existing launcher in place."
+  exit 1
+fi
+mv "${LAUNCHER}.tmp" "$LAUNCHER"
 chmod +x "$LAUNCHER"
 
+PLIST_SRC="${PREP}/launchd/com.finsandpins.ClickToRequestWatcher.plist"
+if [[ ! -s "$PLIST_SRC" ]]; then
+  echo "ERROR: missing plist template ${PLIST_SRC}. Refusing to replace the live LaunchAgent."
+  exit 1
+fi
 sed -e "s|FULL_PATH_TO_LOCAL_CTR_WATCHER_BIN|${BIN}|g" \
     -e "s|FULL_PATH_TO_USER_HOME|${HOME}|g" \
     -e "s|FULL_PATH_TO_LAUNCHER_SCRIPT|${LAUNCHER}|g" \
-  "${PREP}/launchd/com.finsandpins.ClickToRequestWatcher.plist" > "$AGENT"
+  "$PLIST_SRC" > "${AGENT}.tmp"
+if [[ ! -s "${AGENT}.tmp" ]]; then
+  rm -f "${AGENT}.tmp"
+  echo "ERROR: plist render was empty. Left the existing LaunchAgent in place."
+  exit 1
+fi
+plutil -lint "${AGENT}.tmp"
+mv "${AGENT}.tmp" "$AGENT"
 
 plutil -lint "$AGENT"
 
