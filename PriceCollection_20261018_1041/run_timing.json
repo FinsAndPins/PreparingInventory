@@ -1,17 +1,17 @@
 {
   "run_id": "PriceCollection_20261018_1041__build_20261019_fullres",
   "pipeline": "run_visual_baseline_pipeline_product_v1",
-  "generated_at": "2026-10-18T10:46:44",
+  "generated_at": "2026-10-18T11:25:15",
   "roboflow_cropping": {
     "skipped": true,
     "reused_from": "/Users/steve/Library/Application Support/FinsAndPins/PricingWork/20261019_ctr_fullres/reuse_seed_fullres",
     "total_wall_sec": 0.0
   },
   "product_v1": {
-    "crop_count": 249,
-    "approaches_loop_wall_sec": 328.9554,
-    "sum_ebay_search_sec": 255.229,
-    "sum_phash_winner_sec": 67.0033,
+    "crop_count": 251,
+    "approaches_loop_wall_sec": 2.8391,
+    "sum_ebay_search_sec": 257.6288,
+    "sum_phash_winner_sec": 67.4115,
     "per_crop": [
       {
         "crop_filename": "img1441_pin01.jpg",
@@ -1257,6 +1257,16 @@
         "crop_filename": "img1453_pin06.jpg",
         "ebay_search_sec": 1.2292,
         "phash_winner_sec": 0.1434
+      },
+      {
+        "crop_filename": "img1441_pin26.jpg",
+        "ebay_search_sec": 1.6087,
+        "phash_winner_sec": 0.3107
+      },
+      {
+        "crop_filename": "img1446_pin08.jpg",
+        "ebay_search_sec": 0.7911,
+        "phash_winner_sec": 0.0975
       }
     ]
   }
