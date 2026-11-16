@@ -256,6 +256,23 @@ def patch_companion_file(path: Path, show_id: str, pricing_run_id: str) -> bool:
     return True
 
 
+TILT_LINE = "const rot = (rand() - 0.5) * 0.28; // ~±8°"
+UPRIGHT_LINE = "const rot = 0;"
+TILT_COMMENT = "// Mild tilt like a hand-pinned board; AABB accounts for rotation so they never overlap."
+UPRIGHT_COMMENT = "// Pins stay in the orientation they have on the board photo."
+
+
+def keep_virtual_pins_upright(path: Path) -> bool:
+    """New shows copy an older template that tilts virtual-board pins. Keep them upright."""
+    text = path.read_text(encoding="utf-8")
+    if TILT_LINE not in text:
+        return False
+    text = text.replace(TILT_COMMENT, UPRIGHT_COMMENT, 1)
+    text = text.replace(TILT_LINE, UPRIGHT_LINE, 1)
+    path.write_text(text, encoding="utf-8")
+    return True
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Patch CTR show Firebase slug + pricing overlay run id."
@@ -320,6 +337,9 @@ def main() -> int:
         if patch_core_file(path, show_id, pricing_run_id):
             changed += 1
             print(f"Patched {path}")
+        if name == "index.html" and keep_virtual_pins_upright(path):
+            changed += 1
+            print(f"Virtual pin board pins stay upright in {path}")
 
     for name in COMPANION_HTML:
         path = show_dir / name
