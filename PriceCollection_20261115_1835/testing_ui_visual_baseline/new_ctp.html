@@ -48,6 +48,7 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
 #tile-area{flex:1;overflow-y:auto;min-height:0;padding:6px;
   -webkit-overflow-scrolling:touch}
 #tile-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+html.ctp-cols-2 #tile-grid{grid-template-columns:repeat(2,1fr)}
 .tile{position:relative;border-radius:6px;overflow:hidden;
   background:#1a1a1a;border:2px solid transparent;cursor:pointer;
   display:flex;flex-direction:column}
@@ -137,9 +138,21 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
 <div id="nav-menu">
   <a href="new_ctm.html">ClickToMatch v2</a>
   <a href="new_ctp.html" class="current">ClickToPrice v2</a>
+  <a href="new_ctp.html?filter=all&cols=2">ClickToPrice 2 columns</a>
   <a href="contact_sheet.html">Contact Sheet</a>
   <a href="index.html">Overlay</a>
 </div>
+<script>
+(function(){
+  if (new URLSearchParams(location.search).get('cols') !== '2') return;
+  document.documentElement.classList.add('ctp-cols-2');
+  document.querySelectorAll('#nav-menu a').forEach(function(a){
+    var href = a.getAttribute('href') || '';
+    if (href === 'new_ctp.html') a.classList.remove('current');
+    if (href.indexOf('cols=2') !== -1) a.classList.add('current');
+  });
+})();
+</script>
 <script>
 /* Early nav — must run before the large PINS payload blocks the main thread */
 (function(){
@@ -236,6 +249,10 @@ let selPin = 0;
 let confirmed = {};   // pk -> origIdx  (or -1 for not-a-pin)
 let lastUndo  = null;
 let curFilter = 'nomatch';
+function ctpHref(path) {
+  if (new URLSearchParams(window.location.search).get('cols') !== '2') return path;
+  return path + (path.indexOf('?') >= 0 ? '&' : '?') + 'cols=2';
+}
 // Deep-link from overlay/contact sheet: any ?pin= opens All so the pin is visible.
 (function peekCtpUrlFilter(){
   const params = new URLSearchParams(window.location.search);
@@ -814,7 +831,7 @@ function showCtpEmptyMessage(msg, opts) {
 function switchCtpFilter(f) {
   curFilter = f;
   sessionStorage.removeItem(STORE_KEY);
-  try { history.replaceState(null, '', 'new_ctp.html?filter=' + encodeURIComponent(f)); } catch (err) {}
+  try { history.replaceState(null, '', ctpHref('new_ctp.html?filter=' + encodeURIComponent(f))); } catch (err) {}
   document.querySelectorAll('.filt-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.filter === curFilter);
   });
@@ -884,7 +901,7 @@ if (!displayPins.length && curFilter === 'nomatch') {
   document.querySelectorAll('.filt-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.filter === curFilter);
   });
-  try { history.replaceState(null, '', 'new_ctp.html?filter=all'); } catch (err) {}
+  try { history.replaceState(null, '', ctpHref('new_ctp.html?filter=all')); } catch (err) {}
   applyFilter();
 }
 
@@ -910,7 +927,7 @@ if (!displayPins.length && curFilter === 'nomatch') {
   document.querySelectorAll('.filt-btn').forEach(b => b.classList.remove('active'));
   const _allBtn = document.querySelector('.filt-btn[data-filter="all"]');
   if (_allBtn) _allBtn.classList.add('active');
-  try { history.replaceState(null, '', 'new_ctp.html?filter=all&pin=' + encodeURIComponent(pk)); } catch (err) {}
+  try { history.replaceState(null, '', ctpHref('new_ctp.html?filter=all&pin=' + encodeURIComponent(pk))); } catch (err) {}
   applyFilter();
   const i = displayPins.findIndex(p => p.pk === pk);
   if (i < 0) return;
@@ -1036,7 +1053,7 @@ async function _fbReadAllPins() {
     document.querySelectorAll('.filt-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.filter === curFilter);
     });
-    try { history.replaceState(null, '', 'new_ctp.html?filter=all'); } catch (err) {}
+    try { history.replaceState(null, '', ctpHref('new_ctp.html?filter=all')); } catch (err) {}
     applyFilter();
   }
   if (urlPk) {

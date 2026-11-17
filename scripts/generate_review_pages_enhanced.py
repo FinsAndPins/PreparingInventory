@@ -232,6 +232,7 @@ async function _fbReadAllPins() {
 _NAV_LINKS = [
     ('new_ctm.html',          'ClickToMatch v2'),
     ('new_ctp.html',          'ClickToPrice v2'),
+    ('new_ctp.html?filter=all&cols=2', 'ClickToPrice 2 columns'),
     ('contact_sheet.html',    'Contact Sheet'),
     ('index.html',            'Overlay'),
 ]
@@ -263,6 +264,7 @@ a.back-btn{color:#4a9eff;font-size:14px;text-decoration:none;padding:4px 0}
   padding:18px 22px;color:#eee;text-decoration:none;font-size:17px}
 #nav-menu a.current{color:#4a9eff;font-weight:600}
 #nav-menu a:active{background:#333}
+html.ctp-cols-2 #tile-grid{grid-template-columns:repeat(2,1fr)}
 '''
 
 _HAMBURGER_JS = '''\
@@ -1519,6 +1521,18 @@ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
         + '  </div>\n'
         + '</div>\n'
         + _hamburger_html('new_ctp.html')
+        + '''<script>
+(function(){
+  if (new URLSearchParams(location.search).get('cols') !== '2') return;
+  document.documentElement.classList.add('ctp-cols-2');
+  document.querySelectorAll('#nav-menu a').forEach(function(a){
+    var href = a.getAttribute('href') || '';
+    if (href === 'new_ctp.html') a.classList.remove('current');
+    if (href.indexOf('cols=2') !== -1) a.classList.add('current');
+  });
+})();
+</script>
+'''
         + _EARLY_HAMBURGER_SCRIPT
         + _CTP_EARLY_READY_GUARD
         + '<div id="prog-wrap"><div id="prog-fill"></div></div>\n'
@@ -1583,6 +1597,10 @@ let selPin = 0;
 let confirmed = {};   // pk -> origIdx  (or -1 for not-a-pin)
 let lastUndo  = null;
 let curFilter = 'nomatch';
+function ctpHref(path) {
+  if (new URLSearchParams(window.location.search).get('cols') !== '2') return path;
+  return path + (path.indexOf('?') >= 0 ? '&' : '?') + 'cols=2';
+}
 // Deep-link from overlay/contact sheet: any ?pin= opens All so the pin is visible.
 (function peekCtpUrlFilter(){
   const params = new URLSearchParams(window.location.search);
@@ -2166,7 +2184,7 @@ function showCtpEmptyMessage(msg, opts) {
 function switchCtpFilter(f) {
   curFilter = f;
   sessionStorage.removeItem(STORE_KEY);
-  try { history.replaceState(null, '', 'new_ctp.html?filter=' + encodeURIComponent(f)); } catch (err) {}
+  try { history.replaceState(null, '', ctpHref('new_ctp.html?filter=' + encodeURIComponent(f))); } catch (err) {}
   document.querySelectorAll('.filt-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.filter === curFilter);
   });
@@ -2236,7 +2254,7 @@ if (!displayPins.length && curFilter === 'nomatch') {
   document.querySelectorAll('.filt-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.filter === curFilter);
   });
-  try { history.replaceState(null, '', 'new_ctp.html?filter=all'); } catch (err) {}
+  try { history.replaceState(null, '', ctpHref('new_ctp.html?filter=all')); } catch (err) {}
   applyFilter();
 }
 
@@ -2262,7 +2280,7 @@ if (!displayPins.length && curFilter === 'nomatch') {
   document.querySelectorAll('.filt-btn').forEach(b => b.classList.remove('active'));
   const _allBtn = document.querySelector('.filt-btn[data-filter="all"]');
   if (_allBtn) _allBtn.classList.add('active');
-  try { history.replaceState(null, '', 'new_ctp.html?filter=all&pin=' + encodeURIComponent(pk)); } catch (err) {}
+  try { history.replaceState(null, '', ctpHref('new_ctp.html?filter=all&pin=' + encodeURIComponent(pk))); } catch (err) {}
   applyFilter();
   const i = displayPins.findIndex(p => p.pk === pk);
   if (i < 0) return;
@@ -2337,7 +2355,7 @@ if (!displayPins.length && curFilter === 'nomatch') {
     document.querySelectorAll('.filt-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.filter === curFilter);
     });
-    try { history.replaceState(null, '', 'new_ctp.html?filter=all'); } catch (err) {}
+    try { history.replaceState(null, '', ctpHref('new_ctp.html?filter=all')); } catch (err) {}
     applyFilter();
   }
   if (urlPk) {
