@@ -1,0 +1,148 @@
+{
+  "predictions": [
+    {
+      "x": 806.0390625,
+      "y": 1455.890625,
+      "width": 1183.95703125,
+      "height": 1791.97265625,
+      "confidence": 0.9584600329399109,
+      "class": "pin"
+    },
+    {
+      "x": 631.72265625,
+      "y": 3344.0859375,
+      "width": 1175.58984375,
+      "height": 1967.68359375,
+      "confidence": 0.9450961351394653,
+      "class": "pin"
+    },
+    {
+      "x": 2811.375,
+      "y": 2849.02734375,
+      "width": 472.3974609375,
+      "height": 734.220703125,
+      "confidence": 0.9429286122322083,
+      "class": "pin"
+    },
+    {
+      "x": 3196.265625,
+      "y": 697.6142578125,
+      "width": 908.537109375,
+      "height": 688.8984375,
+      "confidence": 0.9406808614730835,
+      "class": "pin"
+    },
+    {
+      "x": 3857.2734375,
+      "y": 2026.25390625,
+      "width": 751.65234375,
+      "height": 772.5703125,
+      "confidence": 0.9393594861030579,
+      "class": "pin"
+    },
+    {
+      "x": 3165.5859375,
+      "y": 3533.7421875,
+      "width": 720.97265625,
+      "height": 639.0439453125,
+      "confidence": 0.9381240010261536,
+      "class": "pin"
+    },
+    {
+      "x": 3143.2734375,
+      "y": 1489.359375,
+      "width": 804.64453125,
+      "height": 741.193359375,
+      "confidence": 0.9369805455207825,
+      "class": "pin"
+    },
+    {
+      "x": 1818.46875,
+      "y": 3285.515625,
+      "width": 1262.748046875,
+      "height": 1992.78515625,
+      "confidence": 0.936168372631073,
+      "class": "pin"
+    },
+    {
+      "x": 2593.828125,
+      "y": 3664.828125,
+      "width": 481.4619140625,
+      "height": 748.86328125,
+      "confidence": 0.9336731433868408,
+      "class": "pin"
+    },
+    {
+      "x": 3129.328125,
+      "y": 2165.70703125,
+      "width": 813.708984375,
+      "height": 523.2978515625,
+      "confidence": 0.9293122291564941,
+      "class": "pin"
+    },
+    {
+      "x": 2688.65625,
+      "y": 4548.9609375,
+      "width": 1056.357421875,
+      "height": 801.85546875,
+      "confidence": 0.9144436717033386,
+      "class": "pin"
+    },
+    {
+      "x": 3734.5546875,
+      "y": 4551.75,
+      "width": 1072.39453125,
+      "height": 817.1953125,
+      "confidence": 0.8901033401489258,
+      "class": "pin"
+    },
+    {
+      "x": 557.8125,
+      "y": 4758.140625,
+      "width": 1029.861328125,
+      "height": 765.59765625,
+      "confidence": 0.8683809638023376,
+      "class": "pin"
+    },
+    {
+      "x": 1681.8046875,
+      "y": 4741.40625,
+      "width": 906.4453125,
+      "height": 812.314453125,
+      "confidence": 0.8569320440292358,
+      "class": "pin"
+    }
+  ],
+  "image": {
+    "width": 4284,
+    "height": 5712
+  },
+  "_pin_tools_meta": {
+    "pin_dedupe": {
+      "rule_id": "pin_dedupe_nms_v2",
+      "pass1": {
+        "rule_id": "pin_dedupe_nms_v1",
+        "method": "greedy_iou_nms_keep_highest_confidence",
+        "iou_threshold": 0.85,
+        "raw_prediction_count": 14,
+        "deduped_prediction_count": 14,
+        "removed_count": 0
+      },
+      "pass2": {
+        "rule_id": "pin_dedupe_nms_v1",
+        "method": "greedy_iou_nms_keep_highest_confidence",
+        "iou_threshold": 0.42,
+        "raw_prediction_count": 14,
+        "deduped_prediction_count": 14,
+        "removed_count": 0
+      },
+      "iou_primary": 0.85,
+      "iou_secondary": 0.42,
+      "raw_prediction_count": 14,
+      "deduped_prediction_count": 14,
+      "removed_count_pass1": 0,
+      "removed_count_pass2": 0,
+      "removed_count_total": 0
+    }
+  }
+}
